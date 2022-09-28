@@ -1,0 +1,8 @@
+xsim.dir
+*.log
+*.jou
+*.str
+*.pb
+test/axsim.sh
+*.swp
+*.swo
