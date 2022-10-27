@@ -1,0 +1,31 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  compliance:
+    name: Regression Tests
+    runs-on: ubuntu-22.04
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        path: minimax
+
+    - name: Install Python, FuseSoC, GCC, GNAT
+      run: |
+        sudo apt-get install -y python3-setuptools python3-numpy gcc-riscv64-unknown-elf gnat build-essential
+        pip3 install fusesoc
+
+    - name: Install GHDL
+      run: |
+        git clone https://github.com/ghdl/ghdl.git --branch v2.0.0
+        cd ghdl
+        ./configure
+        make -j
+        sudo make install
+
+    - name: Run regression tests
+      run: |
+        cd minimax/test
+        make -j
