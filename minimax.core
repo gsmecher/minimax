@@ -1,0 +1,46 @@
+CAPI=2:
+
+name : ::minimax:0
+
+filesets:
+  rtl:
+    files:
+      - rtl/minimax.vhd : {file_type : vhdlSource-2008}
+
+  tb:
+    files:
+      - rtl/minimax_tb.vhd : {file_type : vhdlSource-2008}
+
+targets:
+  default:
+    filesets : [rtl]
+    toplevel : minimax
+    parameters : [PC_BITS, UC_BASE, TRACE]
+
+  sim:
+    default_tool : xsim
+    filesets: [rtl, tb]
+    parameters : [ROM_FILENAME, MAXTICKS, TRACE]
+    toplevel: minimax_tb
+
+parameters:
+  PC_BITS:
+    datatype    : int
+    paramtype   : generic
+    description : Width of the program counter register (i.e. program address space)
+  UC_BASE:
+    datatype    : int
+    paramtype   : generic
+    description : Base address for microcode traps
+  ROM_FILENAME:
+    datatype    : file
+    paramtype   : generic
+    description : Compiled ROM contents, expressed in hex-formatted text (one 32-bit word per line)
+  MAXTICKS:
+    datatype    : int
+    paramtype   : generic
+    description : Sets a timeout for the allowable number of simulation ticks before the testbench bails and declares failure.
+  TRACE:
+    datatype    : bool
+    paramtype   : generic
+    description : Enable/Disable detailed tracing messages during execution
