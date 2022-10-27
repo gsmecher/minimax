@@ -1,6 +1,8 @@
 Minimax: a Compressed-First, Microcoded RISC-V CPU
 ==================================================
 
+[![CI status](https://github.com/gsmecher/minimax/workflows/CI/badge.svg)](https://github.com/gsmecher/minimax/actions?query=workflow%3ACI)
+
 RISC-V's compressed instruction (RVC) extension is intended as an add-on to the
 regular, 32-bit instruction set, not a replacement or competitor. Its designers
 designed RVC instructions to be expanded into regular 32-bit RV32I equivalents
