@@ -52,7 +52,7 @@ $(TESTS): dirs $(SIM) $$@/pass
 $(SIM): $(VDBS)
 	# invalidate "pass" results when we regenerate the simulation.
 	-find $(TESTS) -name pass -exec rm {} \;
-	$(XELAB) -s minimax --generic_top MAXTICKS=100000 --generic_top ROM=test.mem -a work.minimax_tb
+	$(XELAB) -s minimax --generic_top MAXTICKS=100000 --generic_top ROM_FILENAME=test.mem -a work.minimax_tb
 
 # xvhdl
 xsim.dir/work/%.vdb: ../rtl/%.vhd

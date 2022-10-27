@@ -20,8 +20,9 @@ use std.textio.all;
 
 entity minimax_tb is
 	generic (
-		ROM : string := "minimax.rom";
-		MAXTICKS : integer := -1);
+		ROM_FILENAME : string := "minimax.rom";
+		MAXTICKS : integer := -1;
+		TRACE : boolean := TRUE);
 end minimax_tb;
 
 architecture behav of minimax_tb is
@@ -41,7 +42,7 @@ architecture behav of minimax_tb is
 	type rom_type is array(0 to 2047) of std_logic_vector(31 downto 0);
 
 	impure function rom_init return rom_type is
-		file f : text open read_mode is ROM;
+		file f : text open read_mode is ROM_FILENAME;
 		variable l : line;
 		variable rom : rom_type;
 		variable good : boolean := true;
@@ -96,7 +97,8 @@ begin
 	dut : entity work.minimax
 	generic map (
 		PC_BITS => inst_addr'length,
-		UC_BASE => x"00000800")
+		UC_BASE => x"00000800",
+		TRACE => TRACE)
 	port map (
 		clk => clk,
 		reset => reset,
@@ -117,258 +119,11 @@ begin
 		wait;
 	end process;
 
-	-- Emit header
-	process
-		variable buf : line;
-	begin
-		write(buf, "FETCH1" & HT
-			& "FETCH2" & HT
-			& "EXECUTE" & HT
-			& "aguA" & HT
-			& "aguB" & HT
-			& "aguX" & HT
-			& "INST" & HT
-			& "OPCODE" & HT
-			& "addrD" & HT
-			& "addrS" & HT
-			& "regD" & HT & HT
-			& "regS" & HT & HT
-			& "aluA" & HT & HT
-			& "aluB" & HT & HT
-			& "aluS" & HT & HT
-			& "aluX" & HT & HT
-			& "Dnext");
-		writeline(output, buf);
-		wait;
-	end process;
-
-	-- Emit trace
-	trace: process(clk)
-		alias pc_fetch is << signal dut.pc_fetch : unsigned(inst_addr'high downto 1) >>;
-		alias pc_fetch_dly is << signal dut.pc_fetch_dly : unsigned(inst_addr'high downto 1) >>;
-		alias pc_execute is << signal dut.pc_execute : unsigned(inst_addr'high downto 1) >>;
-		alias aguA is << signal dut.aguA : unsigned(inst_addr'high downto 1) >>;
-		alias aguB is << signal dut.aguB : unsigned(inst_addr'high downto 1) >>;
-		alias aguX is << signal dut.aguX : unsigned(inst_addr'high downto 1) >>;
-
-		alias inst is << signal dut.inst : std_logic_vector(15 downto 0) >>;
-
-		alias branch_taken is << signal dut.branch_taken : std_logic >>;
-		alias bubble is << signal dut.bubble : std_logic >>;
-		alias wb is << signal dut.wb : std_logic >>;
-		alias microcode is << signal dut.microcode : std_logic >>;
-
-		alias addrD is << signal dut.addrD : std_logic_vector(5 downto 0) >>;
-		alias addrS is << signal dut.addrS : std_logic_vector(5 downto 0) >>;
-
-		alias regD is << signal dut.regD : std_logic_vector(31 downto 0) >>;
-		alias regS is << signal dut.regS : std_logic_vector(31 downto 0) >>;
-
-		alias aluA is << signal dut.aluA : std_logic_vector(31 downto 0) >>;
-		alias aluB is << signal dut.aluB : std_logic_vector(31 downto 0) >>;
-		alias aluS is << signal dut.aluS : std_logic_vector(31 downto 0) >>;
-		alias aluX is << signal dut.aluX : std_logic_vector(31 downto 0) >>;
-		alias Dnext is << signal dut.Dnext : std_logic_vector(31 downto 0) >>;
-
-		alias rs_reg is << signal dut.rs_reg : std_logic_vector(5 downto 0) >>;
-		alias rd_reg is << signal dut.rd_reg : std_logic_vector(5 downto 0) >>;
-		alias shamt is << signal dut.shamt : unsigned(4 downto 0) >>;
-
-		alias op16_addi4spn is << signal dut.op16_addi4spn : std_logic >>;
-		alias op16_lw is << signal dut.op16_lw : std_logic >>;
-		alias op16_sw is << signal dut.op16_sw : std_logic >>;
-
-		alias op16_addi is << signal dut.op16_addi : std_logic >>;
-		alias op16_jal is << signal dut.op16_jal : std_logic >>;
-		alias op16_li is << signal dut.op16_li : std_logic >>;
-		alias op16_addi16sp is << signal dut.op16_addi16sp : std_logic >>;
-		alias op16_lui is << signal dut.op16_lui : std_logic >>;
-
-		alias op16_srli is << signal dut.op16_srli : std_logic >>;
-		alias op16_srai is << signal dut.op16_srai : std_logic >>;
-		alias op16_andi is << signal dut.op16_andi : std_logic >>;
-		alias op16_sub is << signal dut.op16_sub : std_logic >>;
-		alias op16_xor is << signal dut.op16_xor : std_logic >>;
-		alias op16_or is << signal dut.op16_or : std_logic >>;
-		alias op16_and is << signal dut.op16_and : std_logic >>;
-		alias op16_j is << signal dut.op16_j : std_logic >>;
-		alias op16_beqz is << signal dut.op16_beqz : std_logic >>;
-		alias op16_bnez is << signal dut.op16_bnez : std_logic >>;
-
-		alias op16_slli is << signal dut.op16_slli : std_logic >>;
-		alias op16_lwsp is << signal dut.op16_lwsp : std_logic >>;
-		alias op16_jr is << signal dut.op16_jr : std_logic >>;
-		alias op16_mv is << signal dut.op16_mv : std_logic >>;
-		alias op16_ebreak is << signal dut.op16_ebreak : std_logic >>;
-		alias op16_jalr is << signal dut.op16_jalr : std_logic >>;
-		alias op16_add is << signal dut.op16_add : std_logic >>;
-		alias op16_swsp is << signal dut.op16_swsp : std_logic >>;
-
-		alias op32_lui is << signal dut.op32_lui : std_logic >>;
-		alias op32_auipc is << signal dut.op32_auipc : std_logic >>;
-		alias op32_addi is << signal dut.op32_addi : std_logic >>;
-		alias op32_andi is << signal dut.op32_andi : std_logic >>;
-		alias op32_ori is << signal dut.op32_ori : std_logic >>;
-		alias op32_xori is << signal dut.op32_xori : std_logic >>;
-		alias op32_sll is << signal dut.op32_sll : std_logic >>;
-		alias op32_slli is << signal dut.op32_slli : std_logic >>;
-		alias op32_srl_sra is << signal dut.op32_srl_sra : std_logic >>;
-		alias op32_srli_srai is << signal dut.op32_srli_srai : std_logic >>;
-
-		alias op32 is << signal dut.op32 : std_logic >>;
-		alias op32_trap is << signal dut.op32_trap : std_logic >>;
-
-		alias op16_slli_setrd is << signal dut.op16_slli_setrd : std_logic >>;
-		alias op16_slli_setrs is << signal dut.op16_slli_setrs : std_logic >>;
-		alias op16_slli_thunk is << signal dut.op16_slli_thunk : std_logic >>;
-
+	-- Capture test exit conditions - timeout or quit
+	tb_proc: process(clk)
 		variable buf : line;
 	begin
 		if rising_edge(clk) then
-			write(buf, to_hstring(pc_fetch & "0"));
-			write(buf, HT & to_hstring(pc_fetch_dly & "0"));
-			write(buf, HT & to_hstring(pc_execute & "0"));
-			write(buf, HT & to_hstring(aguA & "0"));
-			write(buf, HT & to_hstring(aguB & "0"));
-			write(buf, HT & to_hstring(aguX & "0"));
-			write(buf, HT & to_hstring(inst));
-			write(buf, HT);
-
-			if op16_ADDI4SPN then
-				write(buf, string'("ADI4SPN")); -- shortened to fit in a tab stop
-			elsif op16_LW then
-				write(buf, string'("LW"));
-			elsif op16_SW then
-				write(buf, string'("SW"));
-			elsif op16_ADDI then
-				write(buf, string'("ADDI"));
-			elsif op16_JAL then
-				write(buf, string'("JAL"));
-			elsif op16_LI then
-				write(buf, string'("LI"));
-			elsif op16_ADDI16SP then
-				write(buf, string'("ADI16SP")); -- shortened to fit in a tab stop
-			elsif op16_LUI then
-				write(buf, string'("LUI"));
-			elsif op16_SRLI then
-				write(buf, string'("SRLI"));
-			elsif op16_SRAI then
-				write(buf, string'("SRAI"));
-			elsif op16_ANDI then
-				write(buf, string'("ANDI"));
-			elsif op16_SUB then
-				write(buf, string'("SUB"));
-			elsif op16_XOR then
-				write(buf, string'("XOR"));
-			elsif op16_OR then
-				write(buf, string'("OR"));
-			elsif op16_AND then
-				write(buf, string'("AND"));
-			elsif op16_J then
-				write(buf, string'("J"));
-			elsif op16_BEQZ then
-				write(buf, string'("BEQZ"));
-			elsif op16_BNEZ then
-				write(buf, string'("BNEZ"));
-			elsif op16_SLLI then
-				write(buf, string'("SLLI"));
-			elsif op16_LWSP then
-				write(buf, string'("LWSP"));
-			elsif op16_JR then
-				write(buf, string'("JR"));
-			elsif op16_MV then
-				write(buf, string'("MV"));
-			elsif op16_EBREAK then
-				write(buf, string'("EBREAK"));
-			elsif op16_JALR then
-				write(buf, string'("JALR"));
-			elsif op16_ADD then
-				write(buf, string'("ADD"));
-			elsif op16_SWSP then
-				write(buf, string'("SWSP"));
-			elsif op16_SLLI_THUNK then
-				write(buf, string'("THUNK"));
-			elsif op16_SLLI_SETRD then
-				write(buf, string'("SETRD"));
-			elsif op16_SLLI_SETRS then
-				write(buf, string'("SETRS"));
-			elsif op32_lui then
-				write(buf, string'("32LUI"));
-			elsif op32_auipc then
-				write(buf, string'("32AUIPC"));
-			elsif op32_sll then
-				write(buf, string'("32SL"));
-			elsif op32_slli then
-				write(buf, string'("32SLI"));
-			elsif op32_srl_sra then
-				write(buf, string'("32SR"));
-			elsif op32_srli_srai then
-				write(buf, string'("32SRI"));
-			elsif op32_addi then
-				write(buf, string'("32ADDI"));
-			elsif op32_andi then
-				write(buf, string'("32ANDI"));
-			elsif op32_ori then
-				write(buf, string'("32ORI"));
-			elsif op32_xori then
-				write(buf, string'("32XORI"));
-			elsif op32 then
-				write(buf, string'("RV32I"));
-			else
-				write(buf, string'("NOP?"));
-			end if;
-
-			write(buf, HT & to_hstring(addrD));
-			write(buf, HT & to_hstring(addrS));
-
-			write(buf, HT & to_hstring(regD));
-			write(buf, HT & to_hstring(regS));
-
-			write(buf, HT & to_hstring(aluA));
-			write(buf, HT & to_hstring(aluB));
-			write(buf, HT & to_hstring(aluS));
-			write(buf, HT & to_hstring(aluX));
-
-			write(buf, HT & to_hstring(Dnext));
-
-			if op32_trap then
-				write(buf, HT & "TRAP");
-			end if;
-			if branch_taken then
-				write(buf, HT & "TAKEN");
-			end if;
-			if bubble then
-				write(buf, HT & "BUBBLE");
-			end if;
-			if wb then
-				write(buf, HT & "WB");
-			end if;
-			if reset then
-				write(buf, HT & "RESET");
-			end if;
-			if microcode then
-				write(buf, HT & "MCODE");
-			end if;
-			if(or wmask) then
-				write(buf, HT & "WMASK=" & to_hstring(wmask));
-				write(buf, HT & "ADDR=" & to_hstring(addr));
-				write(buf, HT & "WDATA=" & to_hstring(wdata));
-			end if;
-			if(rreq) then
-				write(buf, HT & "RREQ");
-				write(buf, HT & "ADDR=" & to_hstring(addr));
-			end if;
-			if(or shamt) then
-				write(buf, HT & "SHAMT=" & to_hstring(shamt));
-			end if;
-			if(or rd_reg) then
-				write(buf, HT & "@RD=" & to_hstring(rd_reg));
-			end if;
-			if(or rs_reg) then
-				write(buf, HT & "@RS=" & to_hstring(rs_reg));
-			end if;
-			writeline(output, buf);
-
 			-- Track ticks counter and bail if we took too long
 			ticks <= ticks + 1;
 			if MAXTICKS/=-1 and ticks >= MAXTICKS then
