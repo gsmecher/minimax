@@ -14,9 +14,6 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-library unisim;
-use unisim.vcomponents.all;
-
 library std;
 use std.env.all;
 use std.textio.all;
@@ -32,7 +29,7 @@ architecture behav of minimax_tb is
 	signal reset : std_logic := '0';
 
 	signal inst_addr : std_logic_vector(12 downto 0);
-	signal inst, inst_reg : std_logic_vector(15 downto 0) := (others => '0');
+	signal inst_lat, inst_reg : std_logic_vector(15 downto 0) := (others => '0');
 	signal inst_regce : std_logic;
 
 	signal addr, rdata, wdata : std_logic_vector(31 downto 0) := (others => '0');
@@ -81,13 +78,13 @@ begin
 			rdata <= rom_array(to_integer(unsigned(addr(inst_addr'high downto 2))));
 			i32 := rom_array(to_integer(unsigned(inst_addr(inst_addr'high downto 2))));
 			if inst_addr(1) then
-				inst <= i32(31 downto 16);
+				inst_lat <= i32(31 downto 16);
 			else
-				inst <= i32(15 downto 0);
+				inst_lat <= i32(15 downto 0);
 			end if;
 
 			if inst_regce then
-				inst_reg <= inst;
+				inst_reg <= inst_lat;
 			end if;
 
 			if wmask=x"f" then
@@ -147,84 +144,83 @@ begin
 
 	-- Emit trace
 	trace: process(clk)
-		alias pc_fetch is << signal minimax_tb.dut.pc_fetch : unsigned(inst_addr'high downto 1) >>;
-		alias pc_fetch_dly is << signal minimax_tb.dut.pc_fetch_dly : unsigned(inst_addr'high downto 1) >>;
-		alias pc_execute is << signal minimax_tb.dut.pc_execute : unsigned(inst_addr'high downto 1) >>;
-		alias aguA is << signal minimax_tb.dut.aguA : unsigned(inst_addr'high downto 1) >>;
-		alias aguB is << signal minimax_tb.dut.aguB : unsigned(inst_addr'high downto 1) >>;
-		alias aguX is << signal minimax_tb.dut.aguX : unsigned(inst_addr'high downto 1) >>;
+		alias pc_fetch is << signal dut.pc_fetch : unsigned(inst_addr'high downto 1) >>;
+		alias pc_fetch_dly is << signal dut.pc_fetch_dly : unsigned(inst_addr'high downto 1) >>;
+		alias pc_execute is << signal dut.pc_execute : unsigned(inst_addr'high downto 1) >>;
+		alias aguA is << signal dut.aguA : unsigned(inst_addr'high downto 1) >>;
+		alias aguB is << signal dut.aguB : unsigned(inst_addr'high downto 1) >>;
+		alias aguX is << signal dut.aguX : unsigned(inst_addr'high downto 1) >>;
 
-		alias inst is << signal minimax_tb.dut.inst : std_logic_vector(15 downto 0) >>;
+		alias inst is << signal dut.inst : std_logic_vector(15 downto 0) >>;
 
-		alias reset is << signal minimax_tb.dut.reset : std_logic >>;
-		alias branch_taken is << signal minimax_tb.dut.branch_taken : std_logic >>;
-		alias bubble is << signal minimax_tb.dut.bubble : std_logic >>;
-		alias wb is << signal minimax_tb.dut.wb : std_logic >>;
-		alias microcode is << signal minimax_tb.dut.microcode : std_logic >>;
+		alias branch_taken is << signal dut.branch_taken : std_logic >>;
+		alias bubble is << signal dut.bubble : std_logic >>;
+		alias wb is << signal dut.wb : std_logic >>;
+		alias microcode is << signal dut.microcode : std_logic >>;
 
-		alias addrD is << signal minimax_tb.dut.addrD : std_logic_vector(5 downto 0) >>;
-		alias addrS is << signal minimax_tb.dut.addrS : std_logic_vector(5 downto 0) >>;
+		alias addrD is << signal dut.addrD : std_logic_vector(5 downto 0) >>;
+		alias addrS is << signal dut.addrS : std_logic_vector(5 downto 0) >>;
 
-		alias regD is << signal minimax_tb.dut.regD : std_logic_vector(31 downto 0) >>;
-		alias regS is << signal minimax_tb.dut.regS : std_logic_vector(31 downto 0) >>;
+		alias regD is << signal dut.regD : std_logic_vector(31 downto 0) >>;
+		alias regS is << signal dut.regS : std_logic_vector(31 downto 0) >>;
 
-		alias aluA is << signal minimax_tb.dut.aluA : std_logic_vector(31 downto 0) >>;
-		alias aluB is << signal minimax_tb.dut.aluB : std_logic_vector(31 downto 0) >>;
-		alias aluS is << signal minimax_tb.dut.aluS : std_logic_vector(32 downto 0) >>;
-		alias aluX is << signal minimax_tb.dut.aluX : std_logic_vector(31 downto 0) >>;
-		alias Dnext is << signal minimax_tb.dut.Dnext : std_logic_vector(31 downto 0) >>;
+		alias aluA is << signal dut.aluA : std_logic_vector(31 downto 0) >>;
+		alias aluB is << signal dut.aluB : std_logic_vector(31 downto 0) >>;
+		alias aluS is << signal dut.aluS : std_logic_vector(31 downto 0) >>;
+		alias aluX is << signal dut.aluX : std_logic_vector(31 downto 0) >>;
+		alias Dnext is << signal dut.Dnext : std_logic_vector(31 downto 0) >>;
 
-		alias rs_reg is << signal minimax_tb.dut.rs_reg : std_logic_vector(5 downto 0) >>;
-		alias rd_reg is << signal minimax_tb.dut.rd_reg : std_logic_vector(5 downto 0) >>;
-		alias shamt is << signal minimax_tb.dut.shamt : unsigned(4 downto 0) >>;
+		alias rs_reg is << signal dut.rs_reg : std_logic_vector(5 downto 0) >>;
+		alias rd_reg is << signal dut.rd_reg : std_logic_vector(5 downto 0) >>;
+		alias shamt is << signal dut.shamt : unsigned(4 downto 0) >>;
 
-		alias op16_addi4spn is << signal minimax_tb.dut.op16_addi4spn : std_logic >>;
-		alias op16_lw is << signal minimax_tb.dut.op16_lw : std_logic >>;
-		alias op16_sw is << signal minimax_tb.dut.op16_sw : std_logic >>;
+		alias op16_addi4spn is << signal dut.op16_addi4spn : std_logic >>;
+		alias op16_lw is << signal dut.op16_lw : std_logic >>;
+		alias op16_sw is << signal dut.op16_sw : std_logic >>;
 
-		alias op16_addi is << signal minimax_tb.dut.op16_addi : std_logic >>;
-		alias op16_jal is << signal minimax_tb.dut.op16_jal : std_logic >>;
-		alias op16_li is << signal minimax_tb.dut.op16_li : std_logic >>;
-		alias op16_addi16sp is << signal minimax_tb.dut.op16_addi16sp : std_logic >>;
-		alias op16_lui is << signal minimax_tb.dut.op16_lui : std_logic >>;
+		alias op16_addi is << signal dut.op16_addi : std_logic >>;
+		alias op16_jal is << signal dut.op16_jal : std_logic >>;
+		alias op16_li is << signal dut.op16_li : std_logic >>;
+		alias op16_addi16sp is << signal dut.op16_addi16sp : std_logic >>;
+		alias op16_lui is << signal dut.op16_lui : std_logic >>;
 
-		alias op16_srli is << signal minimax_tb.dut.op16_srli : std_logic >>;
-		alias op16_srai is << signal minimax_tb.dut.op16_srai : std_logic >>;
-		alias op16_andi is << signal minimax_tb.dut.op16_andi : std_logic >>;
-		alias op16_sub is << signal minimax_tb.dut.op16_sub : std_logic >>;
-		alias op16_xor is << signal minimax_tb.dut.op16_xor : std_logic >>;
-		alias op16_or is << signal minimax_tb.dut.op16_or : std_logic >>;
-		alias op16_and is << signal minimax_tb.dut.op16_and : std_logic >>;
-		alias op16_j is << signal minimax_tb.dut.op16_j : std_logic >>;
-		alias op16_beqz is << signal minimax_tb.dut.op16_beqz : std_logic >>;
-		alias op16_bnez is << signal minimax_tb.dut.op16_bnez : std_logic >>;
+		alias op16_srli is << signal dut.op16_srli : std_logic >>;
+		alias op16_srai is << signal dut.op16_srai : std_logic >>;
+		alias op16_andi is << signal dut.op16_andi : std_logic >>;
+		alias op16_sub is << signal dut.op16_sub : std_logic >>;
+		alias op16_xor is << signal dut.op16_xor : std_logic >>;
+		alias op16_or is << signal dut.op16_or : std_logic >>;
+		alias op16_and is << signal dut.op16_and : std_logic >>;
+		alias op16_j is << signal dut.op16_j : std_logic >>;
+		alias op16_beqz is << signal dut.op16_beqz : std_logic >>;
+		alias op16_bnez is << signal dut.op16_bnez : std_logic >>;
 
-		alias op16_slli is << signal minimax_tb.dut.op16_slli : std_logic >>;
-		alias op16_lwsp is << signal minimax_tb.dut.op16_lwsp : std_logic >>;
-		alias op16_jr is << signal minimax_tb.dut.op16_jr : std_logic >>;
-		alias op16_mv is << signal minimax_tb.dut.op16_mv : std_logic >>;
-		alias op16_ebreak is << signal minimax_tb.dut.op16_ebreak : std_logic >>;
-		alias op16_jalr is << signal minimax_tb.dut.op16_jalr : std_logic >>;
-		alias op16_add is << signal minimax_tb.dut.op16_add : std_logic >>;
-		alias op16_swsp is << signal minimax_tb.dut.op16_swsp : std_logic >>;
+		alias op16_slli is << signal dut.op16_slli : std_logic >>;
+		alias op16_lwsp is << signal dut.op16_lwsp : std_logic >>;
+		alias op16_jr is << signal dut.op16_jr : std_logic >>;
+		alias op16_mv is << signal dut.op16_mv : std_logic >>;
+		alias op16_ebreak is << signal dut.op16_ebreak : std_logic >>;
+		alias op16_jalr is << signal dut.op16_jalr : std_logic >>;
+		alias op16_add is << signal dut.op16_add : std_logic >>;
+		alias op16_swsp is << signal dut.op16_swsp : std_logic >>;
 
-		alias op32_lui is << signal minimax_tb.dut.op32_lui : std_logic >>;
-		alias op32_auipc is << signal minimax_tb.dut.op32_auipc : std_logic >>;
-		alias op32_addi is << signal minimax_tb.dut.op32_addi : std_logic >>;
-		alias op32_andi is << signal minimax_tb.dut.op32_andi : std_logic >>;
-		alias op32_ori is << signal minimax_tb.dut.op32_ori : std_logic >>;
-		alias op32_xori is << signal minimax_tb.dut.op32_xori : std_logic >>;
-		alias op32_sll is << signal minimax_tb.dut.op32_sll : std_logic >>;
-		alias op32_slli is << signal minimax_tb.dut.op32_slli : std_logic >>;
-		alias op32_srl_sra is << signal minimax_tb.dut.op32_srl_sra : std_logic >>;
-		alias op32_srli_srai is << signal minimax_tb.dut.op32_srli_srai : std_logic >>;
+		alias op32_lui is << signal dut.op32_lui : std_logic >>;
+		alias op32_auipc is << signal dut.op32_auipc : std_logic >>;
+		alias op32_addi is << signal dut.op32_addi : std_logic >>;
+		alias op32_andi is << signal dut.op32_andi : std_logic >>;
+		alias op32_ori is << signal dut.op32_ori : std_logic >>;
+		alias op32_xori is << signal dut.op32_xori : std_logic >>;
+		alias op32_sll is << signal dut.op32_sll : std_logic >>;
+		alias op32_slli is << signal dut.op32_slli : std_logic >>;
+		alias op32_srl_sra is << signal dut.op32_srl_sra : std_logic >>;
+		alias op32_srli_srai is << signal dut.op32_srli_srai : std_logic >>;
 
-		alias op32 is << signal minimax_tb.dut.op32 : std_logic >>;
-		alias op32_trap is << signal minimax_tb.dut.op32_trap : std_logic >>;
+		alias op32 is << signal dut.op32 : std_logic >>;
+		alias op32_trap is << signal dut.op32_trap : std_logic >>;
 
-		alias op16_slli_setrd is << signal minimax_tb.dut.op16_slli_setrd : std_logic >>;
-		alias op16_slli_setrs is << signal minimax_tb.dut.op16_slli_setrs : std_logic >>;
-		alias op16_slli_thunk is << signal minimax_tb.dut.op16_slli_thunk : std_logic >>;
+		alias op16_slli_setrd is << signal dut.op16_slli_setrd : std_logic >>;
+		alias op16_slli_setrs is << signal dut.op16_slli_setrs : std_logic >>;
+		alias op16_slli_thunk is << signal dut.op16_slli_thunk : std_logic >>;
 
 		variable buf : line;
 	begin
