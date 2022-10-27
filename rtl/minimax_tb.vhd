@@ -62,20 +62,14 @@ architecture behav of minimax_tb is
 		return rom;
 	end function;
 
-	signal rom_array : rom_type := (others => 32x"0");
+	signal rom_array : rom_type := rom_init;
 begin
 	clk <= not clk after 10 ns;
 
-	rom_proc : process
+	rom_proc : process(clk)
 		variable i32 : std_logic_vector(31 downto 0);
 	begin
-		-- Clunky, but - we want to initialize ROM during simulation, not during elaboration.
-		-- Otherwise, we'd have to create a different executable for each test case.
-		rom_array <= rom_init;
-
-		while True loop
-			wait until rising_edge(clk);
-
+		if rising_edge(clk) then
 			rdata <= rom_array(to_integer(unsigned(addr(inst_addr'high downto 2))));
 			i32 := rom_array(to_integer(unsigned(inst_addr(inst_addr'high downto 2))));
 			if inst_addr(1) then
@@ -91,7 +85,7 @@ begin
 			if wmask=x"f" then
 				rom_array(to_integer(unsigned(addr(inst_addr'high downto 2)))) <= wdata;
 			end if;
-		end loop;
+		end if;
 	end process;
 
 	dut : entity work.minimax
