@@ -544,12 +544,11 @@ begin
 	-- The following trace code has no impact or cost in synthesis - it
 	-- exists only to produce an execution trace for debugging.
 	--
-	trace_gen : if TRACE generate
+	-- pragma synthesis_off
+	process
+		variable buf : line;
 	begin
-		-- Emit header
-		process
-			variable buf : line;
-		begin
+		if TRACE then
 			write(buf, "FETCH1" & HT
 				& "FETCH2" & HT
 				& "EXECUTE" & HT
@@ -568,158 +567,159 @@ begin
 				& "aluX" & HT & HT
 				& "Dnext");
 			writeline(output, buf);
-			wait;
-		end process;
+		end if;
+		wait;
+	end process;
 
-		trace_proc : process(clk)
-			variable buf : line;
-		begin
-			if rising_edge(clk) then
-				write(buf, to_hstring(pc_fetch & "0"));
-				write(buf, HT & to_hstring(pc_fetch_dly & "0"));
-				write(buf, HT & to_hstring(pc_execute & "0"));
-				write(buf, HT & to_hstring(aguA & "0"));
-				write(buf, HT & to_hstring(aguB & "0"));
-				write(buf, HT & to_hstring(aguX & "0"));
-				write(buf, HT & to_hstring(inst));
-				write(buf, HT);
+	trace_proc : process(clk)
+		variable buf : line;
+	begin
+		if TRACE and rising_edge(clk) then
+			write(buf, to_hstring(pc_fetch & "0"));
+			write(buf, HT & to_hstring(pc_fetch_dly & "0"));
+			write(buf, HT & to_hstring(pc_execute & "0"));
+			write(buf, HT & to_hstring(aguA & "0"));
+			write(buf, HT & to_hstring(aguB & "0"));
+			write(buf, HT & to_hstring(aguX & "0"));
+			write(buf, HT & to_hstring(inst));
+			write(buf, HT);
 
-				if op16_ADDI4SPN then
-					write(buf, string'("ADI4SPN")); -- shortened to fit in a tab stop
-				elsif op16_LW then
-					write(buf, string'("LW"));
-				elsif op16_SW then
-					write(buf, string'("SW"));
-				elsif op16_ADDI then
-					write(buf, string'("ADDI"));
-				elsif op16_JAL then
-					write(buf, string'("JAL"));
-				elsif op16_LI then
-					write(buf, string'("LI"));
-				elsif op16_ADDI16SP then
-					write(buf, string'("ADI16SP")); -- shortened to fit in a tab stop
-				elsif op16_LUI then
-					write(buf, string'("LUI"));
-				elsif op16_SRLI then
-					write(buf, string'("SRLI"));
-				elsif op16_SRAI then
-					write(buf, string'("SRAI"));
-				elsif op16_ANDI then
-					write(buf, string'("ANDI"));
-				elsif op16_SUB then
-					write(buf, string'("SUB"));
-				elsif op16_XOR then
-					write(buf, string'("XOR"));
-				elsif op16_OR then
-					write(buf, string'("OR"));
-				elsif op16_AND then
-					write(buf, string'("AND"));
-				elsif op16_J then
-					write(buf, string'("J"));
-				elsif op16_BEQZ then
-					write(buf, string'("BEQZ"));
-				elsif op16_BNEZ then
-					write(buf, string'("BNEZ"));
-				elsif op16_SLLI then
-					write(buf, string'("SLLI"));
-				elsif op16_LWSP then
-					write(buf, string'("LWSP"));
-				elsif op16_JR then
-					write(buf, string'("JR"));
-				elsif op16_MV then
-					write(buf, string'("MV"));
-				elsif op16_EBREAK then
-					write(buf, string'("EBREAK"));
-				elsif op16_JALR then
-					write(buf, string'("JALR"));
-				elsif op16_ADD then
-					write(buf, string'("ADD"));
-				elsif op16_SWSP then
-					write(buf, string'("SWSP"));
-				elsif op16_SLLI_THUNK then
-					write(buf, string'("THUNK"));
-				elsif op16_SLLI_SETRD then
-					write(buf, string'("SETRD"));
-				elsif op16_SLLI_SETRS then
-					write(buf, string'("SETRS"));
-				elsif op32_lui then
-					write(buf, string'("32LUI"));
-				elsif op32_auipc then
-					write(buf, string'("32AUIPC"));
-				elsif op32_sll then
-					write(buf, string'("32SL"));
-				elsif op32_slli then
-					write(buf, string'("32SLI"));
-				elsif op32_srl_sra then
-					write(buf, string'("32SR"));
-				elsif op32_srli_srai then
-					write(buf, string'("32SRI"));
-				elsif op32_addi then
-					write(buf, string'("32ADDI"));
-				elsif op32_andi then
-					write(buf, string'("32ANDI"));
-				elsif op32_ori then
-					write(buf, string'("32ORI"));
-				elsif op32_xori then
-					write(buf, string'("32XORI"));
-				elsif op32 then
-					write(buf, string'("RV32I"));
-				else
-					write(buf, string'("NOP?"));
-				end if;
-
-				write(buf, HT & to_hstring(addrD));
-				write(buf, HT & to_hstring(addrS));
-
-				write(buf, HT & to_hstring(regD));
-				write(buf, HT & to_hstring(regS));
-
-				write(buf, HT & to_hstring(aluA));
-				write(buf, HT & to_hstring(aluB));
-				write(buf, HT & to_hstring(aluS));
-				write(buf, HT & to_hstring(aluX));
-
-				write(buf, HT & to_hstring(Dnext));
-
-				if op32_trap then
-					write(buf, HT & "TRAP");
-				end if;
-				if branch_taken then
-					write(buf, HT & "TAKEN");
-				end if;
-				if bubble then
-					write(buf, HT & "BUBBLE");
-				end if;
-				if wb then
-					write(buf, HT & "WB");
-				end if;
-				if reset then
-					write(buf, HT & "RESET");
-				end if;
-				if microcode then
-					write(buf, HT & "MCODE");
-				end if;
-				if(or wmask) then
-					write(buf, HT & "WMASK=" & to_hstring(wmask));
-					write(buf, HT & "ADDR=" & to_hstring(addr));
-					write(buf, HT & "WDATA=" & to_hstring(wdata));
-				end if;
-				if(rreq) then
-					write(buf, HT & "RREQ");
-					write(buf, HT & "ADDR=" & to_hstring(addr));
-				end if;
-				if(or shamt) then
-					write(buf, HT & "SHAMT=" & to_hstring(shamt));
-				end if;
-				if(or rd_reg) then
-					write(buf, HT & "@RD=" & to_hstring(rd_reg));
-				end if;
-				if(or rs_reg) then
-					write(buf, HT & "@RS=" & to_hstring(rs_reg));
-				end if;
-				writeline(output, buf);
-
+			if op16_ADDI4SPN then
+				write(buf, string'("ADI4SPN")); -- shortened to fit in a tab stop
+			elsif op16_LW then
+				write(buf, string'("LW"));
+			elsif op16_SW then
+				write(buf, string'("SW"));
+			elsif op16_ADDI then
+				write(buf, string'("ADDI"));
+			elsif op16_JAL then
+				write(buf, string'("JAL"));
+			elsif op16_LI then
+				write(buf, string'("LI"));
+			elsif op16_ADDI16SP then
+				write(buf, string'("ADI16SP")); -- shortened to fit in a tab stop
+			elsif op16_LUI then
+				write(buf, string'("LUI"));
+			elsif op16_SRLI then
+				write(buf, string'("SRLI"));
+			elsif op16_SRAI then
+				write(buf, string'("SRAI"));
+			elsif op16_ANDI then
+				write(buf, string'("ANDI"));
+			elsif op16_SUB then
+				write(buf, string'("SUB"));
+			elsif op16_XOR then
+				write(buf, string'("XOR"));
+			elsif op16_OR then
+				write(buf, string'("OR"));
+			elsif op16_AND then
+				write(buf, string'("AND"));
+			elsif op16_J then
+				write(buf, string'("J"));
+			elsif op16_BEQZ then
+				write(buf, string'("BEQZ"));
+			elsif op16_BNEZ then
+				write(buf, string'("BNEZ"));
+			elsif op16_SLLI then
+				write(buf, string'("SLLI"));
+			elsif op16_LWSP then
+				write(buf, string'("LWSP"));
+			elsif op16_JR then
+				write(buf, string'("JR"));
+			elsif op16_MV then
+				write(buf, string'("MV"));
+			elsif op16_EBREAK then
+				write(buf, string'("EBREAK"));
+			elsif op16_JALR then
+				write(buf, string'("JALR"));
+			elsif op16_ADD then
+				write(buf, string'("ADD"));
+			elsif op16_SWSP then
+				write(buf, string'("SWSP"));
+			elsif op16_SLLI_THUNK then
+				write(buf, string'("THUNK"));
+			elsif op16_SLLI_SETRD then
+				write(buf, string'("SETRD"));
+			elsif op16_SLLI_SETRS then
+				write(buf, string'("SETRS"));
+			elsif op32_lui then
+				write(buf, string'("32LUI"));
+			elsif op32_auipc then
+				write(buf, string'("32AUIPC"));
+			elsif op32_sll then
+				write(buf, string'("32SL"));
+			elsif op32_slli then
+				write(buf, string'("32SLI"));
+			elsif op32_srl_sra then
+				write(buf, string'("32SR"));
+			elsif op32_srli_srai then
+				write(buf, string'("32SRI"));
+			elsif op32_addi then
+				write(buf, string'("32ADDI"));
+			elsif op32_andi then
+				write(buf, string'("32ANDI"));
+			elsif op32_ori then
+				write(buf, string'("32ORI"));
+			elsif op32_xori then
+				write(buf, string'("32XORI"));
+			elsif op32 then
+				write(buf, string'("RV32I"));
+			else
+				write(buf, string'("NOP?"));
 			end if;
-		end process;
-	end generate;
+
+			write(buf, HT & to_hstring(addrD));
+			write(buf, HT & to_hstring(addrS));
+
+			write(buf, HT & to_hstring(regD));
+			write(buf, HT & to_hstring(regS));
+
+			write(buf, HT & to_hstring(aluA));
+			write(buf, HT & to_hstring(aluB));
+			write(buf, HT & to_hstring(aluS));
+			write(buf, HT & to_hstring(aluX));
+
+			write(buf, HT & to_hstring(Dnext));
+
+			if op32_trap then
+				write(buf, HT & "TRAP");
+			end if;
+			if branch_taken then
+				write(buf, HT & "TAKEN");
+			end if;
+			if bubble then
+				write(buf, HT & "BUBBLE");
+			end if;
+			if wb then
+				write(buf, HT & "WB");
+			end if;
+			if reset then
+				write(buf, HT & "RESET");
+			end if;
+			if microcode then
+				write(buf, HT & "MCODE");
+			end if;
+			if(or wmask) then
+				write(buf, HT & "WMASK=" & to_hstring(wmask));
+				write(buf, HT & "ADDR=" & to_hstring(addr));
+				write(buf, HT & "WDATA=" & to_hstring(wdata));
+			end if;
+			if(rreq) then
+				write(buf, HT & "RREQ");
+				write(buf, HT & "ADDR=" & to_hstring(addr));
+			end if;
+			if(or shamt) then
+				write(buf, HT & "SHAMT=" & to_hstring(shamt));
+			end if;
+			if(or rd_reg) then
+				write(buf, HT & "@RD=" & to_hstring(rd_reg));
+			end if;
+			if(or rs_reg) then
+				write(buf, HT & "@RS=" & to_hstring(rs_reg));
+			end if;
+			writeline(output, buf);
+
+		end if;
+	end process;
+	-- pragma synthesis_on
 end behav;
