@@ -4,29 +4,45 @@ _start:
 	# Generate register values of 16 two independent ways, and ensure they agree
 	c.li x8, 16
 	c.li x9, 1
-	c.slli x9, 4
+.rept 4
+	c.slli x9, 1
+.endr
 	c.sub x9, x8
 	c.bnez x9, fail
 
 	# Test directly implemented RV32I lui
 	lui x8, 0xabcde
-	c.srli x8, 12
+.rept 12
+	c.srli x8, 1
+.endr
 	c.li x9, 0xe
 	c.xor x8, x9
 
-	c.srli x8, 4
+	c.srli x8, 1
+	c.srli x8, 1
+	c.srli x8, 1
+	c.srli x8, 1
 	c.li x9, 0xd
 	c.xor x8, x9
 
-	c.srli x8, 4
+	c.srli x8, 1
+	c.srli x8, 1
+	c.srli x8, 1
+	c.srli x8, 1
 	c.li x9, 0xc
 	c.xor x8, x9
 
-	c.srli x8, 4
+	c.srli x8, 1
+	c.srli x8, 1
+	c.srli x8, 1
+	c.srli x8, 1
 	c.li x9, 0xb
 	c.xor x8, x9
 
-	c.srli x8, 4
+	c.srli x8, 1
+	c.srli x8, 1
+	c.srli x8, 1
+	c.srli x8, 1
 	c.li x9, 0xa
 	c.xor x8, x9
 
@@ -37,11 +53,17 @@ _start:
 	c.li x9, 0xf
 	c.xor x8, x9
 
-	c.srli x8, 4
+	c.srli x8, 1
+	c.srli x8, 1
+	c.srli x8, 1
+	c.srli x8, 1
 	c.li x9, 0xe
 	c.xor x8, x9
 
-	c.srli x8, 4
+	c.srli x8, 1
+	c.srli x8, 1
+	c.srli x8, 1
+	c.srli x8, 1
 	c.li x9, 0xd
 	c.xor x8, x9
 
@@ -60,7 +82,9 @@ _start:
 
 	# Test LUI
 	c.lui x8, 0xf /* produces 0xf000 */
-	c.srli x8, 12
+.rept 12
+	c.srli x8, 1
+.endr
 	c.addi x8, -15
 	c.bnez x8, fail
 

@@ -13,7 +13,7 @@ LDFLAGS := -march=rv32ic -mabi=ilp32	\
 	   -fno-pic -Wl,--no-relax	\
 	   -nostartfiles -nostdlib
 
-default: dirs microcode.o $(addsuffix /pass, $(TESTS))
+default: dirs $(addsuffix /pass, $(TESTS))
 
 dirs:
 	-@mkdir -p $(TESTS)
@@ -46,7 +46,7 @@ $(TESTS): dirs $$@/pass
 	./bin2mem $@.bin $@
 
 # Linker
-%/a.out: %.o
+%/a.out: %.o microcode.o
 	$(CROSS_CC) $(LDFLAGS) -T bare.ld -o $@ $< microcode.o
 
 # Assembler

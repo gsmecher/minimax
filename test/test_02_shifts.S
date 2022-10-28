@@ -2,23 +2,6 @@
 
 _start:
 	#
-	# Direct RV32 shift
-	#
-#if 0	
-	c.li x8, -1
-	c.li x9, 31
-	sra x10, x8, x9
-	c.addi x10, 1
-	c.bnez x10, fail
-#endif
-	c.li x8, 1
-	c.li x9, 31
-	sll x8, x8, x9
-	c.srli x8, 31
-	c.addi x8, -1
-	c.bnez x8, fail
-
-	#
 	# Normal shifts with shamt=1
 	#
 

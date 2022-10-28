@@ -20,7 +20,7 @@ use std.textio.all;
 
 entity minimax_tb is
 	generic (
-		ROM_FILENAME : string := "minimax.rom";
+		ROM_FILENAME : string := "/dev/null";
 		MAXTICKS : integer := -1;
 		TRACE : boolean := TRUE);
 end minimax_tb;
@@ -128,7 +128,7 @@ begin
 
 			-- Capture writes to address 0xfffffffc and use these as "quit" values
 			if wmask=x"f" and addr=x"fffffffc" then
-				if to_integer(signed(wdata))=0 then
+				if nor wdata then
 					write(buf, string'("SUCCESS: returned 0."));
 				else
 					write(buf, "FAIL: returned " & integer'image(to_integer(signed(wdata))));

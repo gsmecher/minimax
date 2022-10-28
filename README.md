@@ -59,16 +59,13 @@ Native instructions are selected for a balance of:
      set.
 
 * Sufficiency. Some RV32I instructions can't be emulated using just RV32C
-  and require RTL support. (For example: variable shifts, word/byte loads
-  and stores).
+  and require RTL support. (For example: word/byte stores.)
 
 We end up with the following native instructions:
 
-* C.xxx (all RV32C)
+* C.xxx (all RV32C, except shifts that aren't 0 or 1 bit)
 * LUI, AUIPC
 * ADDI/NOP, ANDI, ORI, XORI
-* SLLI, SRLI, SRAI
-* SLL, SRL, SRA (these ones can't be implemented in RV32C alone)
 
 Why is this desirable?
 
@@ -115,7 +112,7 @@ What's the design like?
 
 Resource usage (excluding ROM and peripherals; KU060; 12-bit PC):
 
-* Minimax: 73 FFs, 496 CLB LUTs
+* Minimax: 61 FFs, 423 CLB LUTs
 
 Compare to:
 

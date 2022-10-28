@@ -44,16 +44,13 @@
 --      set.
 --
 -- * Sufficiency. Some RV32I instructions can't be emulated using just RV32C
---   and require RTL support. (For example: variable shifts, word/byte loads
---   and stores).
+--   and require RTL support. (For example: word/byte loads and stores).
 --
 -- We end up with the following native instructions:
 --
--- * C.xxx (all RV32C)
+-- * C.xxx (all RV32C except shifts that aren't 0 or 1 bit)
 -- * LUI, AUIPC
 -- * ADDI/NOP, ANDI, ORI, XORI
--- * SLLI, SRLI, SRAI
--- * SLL, SRL, SRA (these ones can't be implemented in RV32C alone)
 --
 -- Why is this desirable?
 --
@@ -94,7 +91,7 @@
 --
 -- Resource usage (excluding ROM and peripherals; KU060; 12-bit PC):
 --
--- * Minimax: 73 FFs, 496 CLB LUTs
+-- * Minimax: 61 FFs, 423 CLB LUTs
 --
 -- Compare to:
 --
@@ -156,8 +153,8 @@ architecture behav of minimax is
 
 	-- Track bubbles and execution inhibits through the pipeline.
 	signal bubble, bubble1, bubble2 : std_logic := '1';
-	signal caboose : std_logic := '0';
-	signal branch_taken, op32_trap, microcode : std_logic := '0';
+	signal branch_taken, microcode : std_logic := '0';
+	signal trap, op16_trap, op32_trap : std_logic := '0';
 
 	-- Writeback and deferred writeback strobes
 	signal wb : std_logic := '0';
@@ -165,6 +162,7 @@ architecture behav of minimax is
 	signal rf_rs1_15 : std_logic := '0';
 
 	-- Strobes for 16-bit instructions
+	signal op16 : std_logic := '0';
 	signal op16_addi4spn : std_logic := '0';
 	signal op16_lw, dly16_lw : std_logic := '0';
 	signal op16_sw : std_logic := '0';
@@ -199,84 +197,80 @@ architecture behav of minimax is
 	signal op16_slli_setrd, dly16_slli_setrd : std_logic := '0';
 	signal op16_slli_setrs, dly16_slli_setrs : std_logic := '0';
 	signal op16_slli_thunk : std_logic := '0';
+	signal op16_slli_swap : std_logic := '0';
 
 	-- Strobes for 32-bit instructions
-	signal op32 : std_logic := '0';
+	signal op32, dly32 : std_logic := '0';
 	signal op32_lui, dly32_lui : std_logic := '0';
 	signal op32_auipc, dly32_auipc : std_logic := '0';
 	signal op32_addi, dly32_addi : std_logic := '0';
 	signal op32_andi, dly32_andi : std_logic := '0';
 	signal op32_ori, dly32_ori : std_logic := '0';
 	signal op32_xori, dly32_xori : std_logic := '0';
-	signal op32_sll, dly32_sll : std_logic := '0';
-	signal op32_srl_sra, dly32_srl_sra : std_logic := '0';
-	signal op32_slli, dly32_slli : std_logic := '0';
-	signal op32_srli_srai, dly32_srli_srai : std_logic := '0';
-
-	-- Shifts take multiple cycles. The following signals are used to track state.
-	signal shift_strobe : std_logic;
-	signal shamt : unsigned(4 downto 0) := (others => '0');
-	signal shamtZ : std_logic;
-	signal dly_srl, dly_sra, dly_sll : std_logic := '0';
 
 begin
 	-- From 16.8 (RVC Instruction Set Listings)
-	op16_addi4spn	<= inst ?= b"000_-_-----_-----_00" and not (bubble or caboose);
-	op16_lw		<= inst ?= b"010_-_-----_-----_00" and not (bubble or caboose);
-	op16_sw		<= inst ?= b"110_-_-----_-----_00" and not (bubble or caboose);
+	op16_addi4spn	<= inst ?= b"000_-_-----_-----_00" and not (bubble or dly32);
+	op16_lw		<= inst ?= b"010_-_-----_-----_00" and not (bubble or dly32);
+	op16_sw		<= inst ?= b"110_-_-----_-----_00" and not (bubble or dly32);
 
-	op16_addi	<= inst ?= b"000_-_-----_-----_01" and not (bubble or caboose);
-	op16_jal	<= inst ?= b"001_-_-----_-----_01" and not (bubble or caboose);
-	op16_li		<= inst ?= b"010_-_-----_-----_01" and not (bubble or caboose);
-	op16_addi16sp	<= inst ?= b"011_-_00010_-----_01" and not (bubble or caboose);
-	op16_lui	<= inst ?= b"011_-_-----_-----_01" and not (bubble or caboose) and not op16_addi16sp;
+	op16_addi	<= inst ?= b"000_-_-----_-----_01" and not (bubble or dly32);
+	op16_jal	<= inst ?= b"001_-_-----_-----_01" and not (bubble or dly32);
+	op16_li		<= inst ?= b"010_-_-----_-----_01" and not (bubble or dly32);
+	op16_addi16sp	<= inst ?= b"011_-_00010_-----_01" and not (bubble or dly32);
+	op16_lui	<= inst ?= b"011_-_-----_-----_01" and not (bubble or dly32) and not op16_addi16sp;
 
-	op16_srli	<= inst ?= b"100_0_00---_-----_01" and not (bubble or caboose);
-	op16_srai	<= inst ?= b"100_0_01---_-----_01" and not (bubble or caboose);
-	op16_andi	<= inst ?= b"100_-_10---_-----_01" and not (bubble or caboose);
-	op16_sub	<= inst ?= b"100_-_11---_00---_01" and not (bubble or caboose);
-	op16_xor	<= inst ?= b"100_-_11---_01---_01" and not (bubble or caboose);
-	op16_or		<= inst ?= b"100_-_11---_10---_01" and not (bubble or caboose);
-	op16_and	<= inst ?= b"100_-_11---_11---_01" and not (bubble or caboose);
-	op16_j		<= inst ?= b"101_-_-----_-----_01" and not (bubble or caboose);
-	op16_beqz	<= inst ?= b"110_-_-----_-----_01" and not (bubble or caboose);
-	op16_bnez	<= inst ?= b"111_-_-----_-----_01" and not (bubble or caboose);
+	op16_srli	<= inst ?= b"100_0_00---_0000-_01" and not (bubble or dly32); -- shamt 0 or 1 are directly implemented
+	op16_srai	<= inst ?= b"100_0_01---_0000-_01" and not (bubble or dly32); -- shamt 0 or 1 are directly implemented
+	op16_andi	<= inst ?= b"100_-_10---_-----_01" and not (bubble or dly32);
+	op16_sub	<= inst ?= b"100_-_11---_00---_01" and not (bubble or dly32);
+	op16_xor	<= inst ?= b"100_-_11---_01---_01" and not (bubble or dly32);
+	op16_or		<= inst ?= b"100_-_11---_10---_01" and not (bubble or dly32);
+	op16_and	<= inst ?= b"100_-_11---_11---_01" and not (bubble or dly32);
+	op16_j		<= inst ?= b"101_-_-----_-----_01" and not (bubble or dly32);
+	op16_beqz	<= inst ?= b"110_-_-----_-----_01" and not (bubble or dly32);
+	op16_bnez	<= inst ?= b"111_-_-----_-----_01" and not (bubble or dly32);
 
-	op16_slli	<= inst ?= b"000_0_-----_-----_10" and not (bubble or caboose);
-	op16_lwsp	<= inst ?= b"010_-_-----_-----_10" and not (bubble or caboose);
-	op16_jr		<= inst ?= b"100_0_-----_00000_10" and not (bubble or caboose);
-	op16_mv		<= inst ?= b"100_0_-----_-----_10" and not (bubble or caboose) and not op16_jr;
-	op16_ebreak	<= inst ?= b"100_1_00000_00000_10" and not (bubble or caboose);
-	op16_jalr	<= inst ?= b"100_1_-----_00000_10" and not (bubble or caboose) and not op16_ebreak;
-	op16_add	<= inst ?= b"100_1_-----_-----_10" and not (bubble or caboose) and not op16_jalr and not op16_ebreak;
-	op16_swsp	<= inst ?= b"110_-_-----_-----_10" and not (bubble or caboose);
+	op16_slli	<= inst ?= b"000_0_-----_0000-_10" and not (bubble or dly32); -- shamt 0 or 1 are directly implemented
+	op16_lwsp	<= inst ?= b"010_-_-----_-----_10" and not (bubble or dly32);
+	op16_jr		<= inst ?= b"100_0_-----_00000_10" and not (bubble or dly32);
+	op16_mv		<= inst ?= b"100_0_-----_-----_10" and not (bubble or dly32) and not op16_jr;
+	op16_ebreak	<= inst ?= b"100_1_00000_00000_10" and not (bubble or dly32);
+	op16_jalr	<= inst ?= b"100_1_-----_00000_10" and not (bubble or dly32) and not op16_ebreak;
+	op16_add	<= inst ?= b"100_1_-----_-----_10" and not (bubble or dly32) and not op16_jalr and not op16_ebreak;
+	op16_swsp	<= inst ?= b"110_-_-----_-----_10" and not (bubble or dly32);
 
 	-- Non-standard extensions to support microcode are permitted in these opcode gaps
-	op16_slli_setrd	<= inst ?= b"000_1_-----_00000_10" and not (bubble or caboose) and microcode;
-	op16_slli_setrs	<= inst ?= b"000_1_-----_00001_10" and not (bubble or caboose) and microcode;
-	op16_slli_thunk	<= inst ?= b"000_1_-----_00010_10" and not (bubble or caboose) and microcode;
+	op16_slli_setrd	<= inst ?= b"000_1_-----_00001_10" and not (bubble or dly32);
+	op16_slli_setrs	<= inst ?= b"000_1_-----_00010_10" and not (bubble or dly32);
+	op16_slli_thunk	<= inst ?= b"000_1_-----_00100_10" and not (bubble or dly32);
+	op16_slli_swap	<= inst ?= b"000_1_-----_01000_10" and not (bubble or dly32);
 
 	-- Directly implemented RV32I instructions
-	op32_lui	<= inst ?= b"-_---_-----_0110111" and not (bubble or caboose);
-	op32_addi	<= inst ?= b"-_000_-----_0010011" and not (bubble or caboose);
-	op32_andi	<= inst ?= b"-_111_-----_0010011" and not (bubble or caboose);
-	op32_ori	<= inst ?= b"-_110_-----_0010011" and not (bubble or caboose);
-	op32_xori	<= inst ?= b"-_100_-----_0010011" and not (bubble or caboose);
-	op32_slli	<= inst ?= b"-_001_-----_0010011" and not (bubble or caboose);
-	op32_srli_srai	<= inst ?= b"-_101_-----_0010011" and not (bubble or caboose);
-	op32_auipc	<= inst ?= b"-_---_-----_0010111" and not (bubble or caboose);
-	op32_sll	<= inst ?= b"-_001_-----_0110011" and not (bubble or caboose);
-	op32_srl_sra	<= inst ?= b"-_101_-----_0110011" and not (bubble or caboose);
+	op32_lui	<= inst ?= b"-_---_-----_0110111" and not (bubble or dly32);
+	op32_addi	<= inst ?= b"-_000_-----_0010011" and not (bubble or dly32);
+	op32_andi	<= inst ?= b"-_111_-----_0010011" and not (bubble or dly32);
+	op32_ori	<= inst ?= b"-_110_-----_0010011" and not (bubble or dly32);
+	op32_xori	<= inst ?= b"-_100_-----_0010011" and not (bubble or dly32);
+	op32_auipc	<= inst ?= b"-_---_-----_0010111" and not (bubble or dly32);
 
-	-- Blanket match for RV32I instructions
-	op32		<= inst ?= b"---_-_-----_-----_11" and not (bubble or caboose);
+	-- Blanket matches for RVC and RV32I instructions
+	op32 <= and inst(1 downto 0) and not (bubble or dly32);
+	op16 <= nand inst(1 downto 0) and not (bubble or dly32);
 
-	-- Trap condition
+	-- Trap on unimplemented instructions
 	op32_trap <= op32 and not (
 		op32_lui or op32_auipc or
-		op32_addi or op32_andi or op32_ori or op32_xori or
-		op32_slli or op32_srli_srai or
-		op32_sll or op32_srl_sra);
+		op32_addi or op32_andi or op32_ori or op32_xori);
+
+	op16_trap <= op16 and not (
+		op16_addi4spn or op16_lw or op16_sw or
+		op16_addi or op16_jal or op16_li or op16_addi16sp or op16_lui or
+		op16_srli or op16_srai or op16_andi or op16_sub or op16_xor or op16_or or op16_and or op16_j or op16_beqz or op16_bnez or
+		op16_slli or op16_lwsp or op16_jr or op16_mv or op16_ebreak or op16_jalr or op16_add or op16_swsp or
+		op16_slli_setrd or op16_slli_setrs or op16_slli_thunk or op16_slli_swap);
+
+	trap <= op16_trap or op32_trap;
 
 	assert UC_BASE(31 downto PC_BITS)=0
 		report "Microcode at " & to_hstring(UC_BASE) & " cannot be reached with a " & integer'image(PC_BITS) & "-bit program counter!"
@@ -299,29 +293,19 @@ begin
 		or op16_J or op16_JAL or op16_JR or op16_JALR
 		or op16_SLLI_THUNK;
 
-	shift_strobe <= op16_srli or op16_slli or op16_srai or
-		dly32_sll or dly32_slli or
-		dly32_srl_sra or dly32_srli_srai;
-
-	shamtZ <= nor shamt;
-
 	fetch_proc : process(clk)
 	begin
 		if rising_edge(clk) then
 			-- Update fetch instruction unless we're hung up on a multi-cycle instruction word
-			if reset='1' then
-				pc_fetch <= (others => '0');
-			else
-				pc_fetch <= aguX;
-			end if;
+			pc_fetch <= aguX and not reset;
 
 			-- Fetch misses create a 2-cycle penalty
-			bubble2 <= reset or branch_taken or op32_trap;
+			bubble2 <= reset or branch_taken or trap;
 
 			-- Multi-cycle instructions must correctly pause the fetch/execution pipeline
-			bubble1 <= reset or bubble2 or rreq or shift_strobe or dly_srl or dly_sll or dly_sra;
+			bubble1 <= reset or bubble2 or rreq;
 
-			if shift_strobe or rreq or dly_srl or dly_sll or dly_sra then
+			if rreq then
 				inst_regce <= '0';
 			else
 				pc_fetch_dly <= pc_fetch;
@@ -329,18 +313,12 @@ begin
 				inst_regce <= '1';
 			end if;
 
-			caboose <= op32;
-			microcode <= (microcode or op32_trap) and not (reset or op16_SLLI_THUNK);
+			dly32 <= op32;
+			microcode <= (microcode or trap) and not (reset or op16_SLLI_THUNK);
 
-			assert not (microcode and op32_trap)
+			assert not (microcode and trap)
 				report "Double trap!"
 				severity failure;
-
-			if reset or op16_SLLI_THUNK then
-				microcode <= '0';
-			elsif op32_trap then
-				microcode <= '1';
-			end if;
 		end if;
 	end process;
 
@@ -356,10 +334,6 @@ begin
 			dly32_andi <= op32_andi;
 			dly32_ori <= op32_ori;
 			dly32_xori <= op32_xori;
-			dly32_sll <= op32_sll;
-			dly32_srl_sra <= op32_srl_sra;
-			dly32_slli <= op32_slli;
-			dly32_srli_srai <= op32_srli_srai;
 
 			dly16_lw <= op16_lw;
 			dly16_lwsp <= op16_lwsp;
@@ -372,83 +346,46 @@ begin
 			-- when execution occurs.
 			rf_rs1_15 <= inst(15);
 
-			if reset='1' then
-				shamt <= (others => '0');
-				dly_srl <= '0';
-				dly_sll <= '0';
-				dly_sra <= '0';
-			else
-				-- Load and clobber instructions complete a cycle after they are
-				-- initiated, so we need to keep some state.
-				rd_reg <= (('0' & regD(4 downto 0)) and op16_SLLI_SETRD)
-					or (rd_reg and (dly_sll or dly_srl or dly_sra
-						or dly32_sll or dly32_srl_sra
-						or dly32_slli or dly32_srli_srai))
-					or ((microcode & "01" & inst(4 downto 2)) and op16_LW)
-					or ((microcode & inst(11 downto 7)) and (op16_LWSP or op32 or op16_SLLI))
-					or ((microcode & "01" & inst(9 downto 7)) and (op16_SRLI or op16_SRAI));
+			-- Load and clobber instructions complete a cycle after they are
+			-- initiated, so we need to keep some state.
+			rd_reg <= (('0' & regD(4 downto 0)) and op16_SLLI_SETRD)
+				or ((microcode & "01" & inst(4 downto 2)) and op16_LW)
+				or ((microcode & inst(11 downto 7)) and (op16_LWSP or op32));
 
-				rs_reg <= (('0' & regD(4 downto 0)) and op16_SLLI_SETRS)
-					or (rd_reg and (dly_sll or dly_srl or dly_sra)) -- transfer rd_reg -> rs_reg after first shift
-					or ((microcode & inst(11 downto 7)) and (op16_LWSP or op16_SLLI))
-					or ((microcode & "01" & inst(9 downto 7)) and (op16_SRLI or op16_SRAI))
-					or ((microcode & (inst(3 downto 0) & rf_rs1_15)) and (
-						dly32_sll or dly32_srl_sra
-						or dly32_slli or dly32_srli_srai));
-
-				-- Shift operations also stall the pipeline.
-				-- It goes like this:
-				--
-				-- cycle 0: shift amount transferred into shamt
-				-- cycle 1..shamt: shift happens; pipeline otherwise stalled
-				if dly_sll or dly_srl or dly_sra then
-					if shamtZ then
-						dly_srl <= '0';
-						dly_sll <= '0';
-						dly_sra <= '0';
-					else
-						shamt <= shamt - 1;
-					end if;
-				else
-					shamt <= (unsigned(inst(6 downto 2)) and (op16_SLLI or op16_SRLI or op16_SRAI))
-						or (unsigned(regS(shamt'range)) and (dly32_sll or dly32_srl_sra))
-						or (unsigned(inst(8 downto 4)) and (dly32_slli or dly32_srli_srai));
-
-					dly_sll <= op16_SLLI or dly32_sll or dly32_slli;
-					dly_srl <= op16_SRLI or ((dly32_srl_sra or dly32_srli_srai) and not inst(14));
-					dly_sra <= op16_SRAI or ((dly32_srl_sra or dly32_srli_srai) and inst(14));
-				end if;
-			end if;
+			rs_reg <= (('0' & regD(4 downto 0)) and op16_SLLI_SETRS)
+				or ((microcode & inst(11 downto 7)) and op16_LWSP);
 		end if;
 	end process;
 
 	-- READ/WRITE register file port
 	addrD(4 downto 0) <= rd_reg(4 downto 0)
-			or (5ux"01" and (op16_JAL or op16_JALR or op32_trap)) -- write return address into ra
+			or (5ux"01" and (op16_JAL or op16_JALR or trap)) -- write return address into ra
 			or (("01" & inst(4 downto 2)) and (op16_ADDI4SPN or op16_SW)) -- data
 			or (inst(6 downto 2) and op16_SWSP)
 			or (inst(11 downto 7) and (op16_ADDI or op16_ADD
 				or (op16_MV and not dly16_slli_setrd)
 				or op16_ADDI16SP
-				or op16_SLLI_SETRD or op16_SLLI_SETRS
+				or op16_SLLI_SETRD or op16_SLLI_SETRS or op16_SLLI_SWAP 
 				or op16_LI or op16_LUI
-				or op32_LUI or op32_AUIPC))
-			or (("01" & inst(9 downto 7)) and (op16_SUB or op16_XOR or op16_OR or op16_AND or op16_ANDI));
+				or op32_LUI or op32_AUIPC
+				or op16_SLLI))
+			or (("01" & inst(9 downto 7)) and (op16_SUB
+				or op16_XOR or op16_OR or op16_AND or op16_ANDI
+				or op16_SRLI or op16_SRAI));
 
 	-- READ-ONLY register file port
 	addrS(4 downto 0) <= rs_reg(4 downto 0)
 			or ((inst(3 downto 0) & rf_rs1_15) and (
 				dly32_addi or dly32_andi or dly32_ori or dly32_xori))
 			or (5ux"02" and (op16_ADDI4SPN or op16_LWSP or op16_SWSP))
-			or (inst(11 downto 7) and (op16_JR or op16_JALR or op16_slli_thunk)) -- jump destination
+			or (inst(11 downto 7) and (op16_JR or op16_JALR or op16_slli_thunk or op16_SLLI)) -- jump destination
 			or (("01" & inst(9 downto 7)) and (op16_SW or op16_LW or op16_BEQZ or op16_BNEZ))
 			or (("01" & inst(4 downto 2)) and (op16_AND or op16_OR or op16_XOR or op16_SUB))
-			or (inst(6 downto 2) and ((op16_MV and not dly16_slli_setrs) or op16_ADD))
-			or (inst(8 downto 4) and (dly32_sll or dly32_srl_sra)); -- capture shamt
+			or (inst(6 downto 2) and ((op16_MV and not dly16_slli_setrs) or op16_ADD));
 
 	-- Select between "normal" and "microcode" register banks.
-	addrD(5) <= rd_reg(5) or op32_trap or (microcode xor dly16_slli_setrd);
-	addrS(5) <= rs_reg(5) or op32_trap or (microcode xor dly16_slli_setrs);
+	addrD(5) <= rd_reg(5) or trap or (microcode xor dly16_slli_setrd);
+	addrS(5) <= rs_reg(5) or trap or (microcode xor dly16_slli_setrs);
 
 	-- Look up register file contents combinatorially
 	regD <= register_file(to_integer(unsigned(addrD)));
@@ -457,10 +394,11 @@ begin
 	aluA <= (regD and (op16_ADD or op16_ADDI or op16_SUB
 			or op16_AND or op16_ANDI
 			or op16_OR or op16_XOR
-			or dly_sll or dly_srl or dly_sra
 			or dly32_lui
 			or dly32_auipc
-			or op16_ADDI16SP))
+			or op16_ADDI16SP
+			or op16_SLLI or op16_SRLI or op16_SRAI
+			or op16_SLLI_SWAP))
 		or ((22x"0" & inst(10 downto 7) & inst(12 downto 11) & inst(5) & inst(6) & "00") and op16_ADDI4SPN)
 		or ((std_logic_vector'(31 downto 8 => '0') & inst(8 downto 7) & inst(12 downto 9) & "00") and op16_SWSP)
 		or ((std_logic_vector'(31 downto 8 => '0') & inst(3 downto 2) & inst(12) & inst(6 downto 4) & "00") and op16_LWSP)
@@ -492,21 +430,21 @@ begin
 			or op16_ADDI4SPN or op16_ADDI16SP
 			or op16_LW or op16_SW
 			or op16_LWSP or op16_SWSP
-			or op16_MV)) or
-		((aluB(30 downto 0) & "0") and (not shamtZ) and dly_sll) or
-		((((dly_SRA or op16_srai) and aluB(31)) & aluB(31 downto 1)) and (not shamtZ) and (dly_sra or dly_srl)) or
-		(aluB and (dly_sra or dly_srl or dly_sll) and shamtZ) or
+			or op16_MV
+			or op16_SLLI)) or
+		(((op16_srai and aluA(31)) & aluA(31 downto 1)) and (op16_SRAI or op16_SRLI)) or
 		((aluA and aluB) and (op16_ANDI or op16_AND or dly32_andi)) or
 		((aluA xor aluB) and (op16_XOR or dly32_xori)) or
-		((aluA or aluB) and (op16_OR or dly32_ori));
+		((aluA or aluB) and (op16_OR or dly32_ori)) or
+		((aluA(15 downto 0) & aluA(31 downto 16)) and op16_SLLI_SWAP);
 
 	Dnext <= (rdata and (dly16_lw or dly16_lwsp))
-		or (std_logic_vector(resize(pc_fetch_dly & "0", 32) and (op16_JAL or op16_JALR or op32_trap))) -- instruction following the jump (hence _dly)
+		or (std_logic_vector(resize(pc_fetch_dly & "0", 32) and (op16_JAL or op16_JALR or trap))) -- instruction following the jump (hence _dly)
 		or aluX(addr'range);
 
 	-- Address Generation Unit (AGU)
 
-	aguA <= (pc_fetch and not (op16_JR or op16_JALR or op32_trap or branch_taken))
+	aguA <= (pc_fetch and not (op16_JR or op16_JALR or trap or branch_taken))
 		or (pc_execute and branch_taken and not (op16_JR or op16_JALR or op16_slli_thunk));
 
 	aguB <= (unsigned(regS(aguB'range)) and (op16_JR or op16_JALR or op16_slli_thunk))
@@ -514,20 +452,21 @@ begin
 			and branch_taken and (op16_J or op16_JAL))
 		or unsigned((std_logic_vector'(aguB'high downto 8 => inst(12)) & inst(6 downto 5) & inst(2) & inst(11 downto 10) & inst(4 downto 3))
 			and branch_taken and (op16_BNEZ or op16_BEQZ))
-		or (unsigned(UC_BASE(pc_fetch'range)) and op32_trap);
+		or (unsigned(UC_BASE(pc_fetch'range)) and trap);
 
-	aguX <= (aguA + aguB) + not (shift_strobe or branch_taken or dly_srl or dly_sra or dly_sll or rreq or op32_trap);
+	aguX <= (aguA + aguB) + not (branch_taken or rreq or trap);
 
-	wb <= op32_trap or			-- writes microcode x1/ra
+	wb <= trap or				-- writes microcode x1/ra
 		dly16_lw or dly16_lwsp or	-- writes data
 		op16_JAL or op16_JALR or	-- writes x1/ra
 		op16_LI or op16_LUI or
 		op16_ADDI or op16_ADDI4SPN or op16_ADDI16SP or
-		dly_SRL or dly_SLL or dly_SRA or
 		op16_ANDI or op16_MV or op16_ADD or
 		op16_AND or op16_OR or op16_XOR or op16_SUB or
 		op32_lui or dly32_lui or
 		op32_auipc or dly32_auipc or
+		((op16_SLLI or op16_SRLI or op16_SRAI) and inst(2)) or -- suppress writeback of 1-bit shifts with 0 immediate
+		op16_SLLI_SWAP or
 		dly32_addi or dly32_andi or dly32_ori or dly32_xori;
 
 	regs_proc : process(clk)
@@ -646,14 +585,6 @@ begin
 				write(buf, string'("32LUI"));
 			elsif op32_auipc then
 				write(buf, string'("32AUIPC"));
-			elsif op32_sll then
-				write(buf, string'("32SL"));
-			elsif op32_slli then
-				write(buf, string'("32SLI"));
-			elsif op32_srl_sra then
-				write(buf, string'("32SR"));
-			elsif op32_srli_srai then
-				write(buf, string'("32SRI"));
 			elsif op32_addi then
 				write(buf, string'("32ADDI"));
 			elsif op32_andi then
@@ -681,7 +612,7 @@ begin
 
 			write(buf, HT & to_hstring(Dnext));
 
-			if op32_trap then
+			if trap then
 				write(buf, HT & "TRAP");
 			end if;
 			if branch_taken then
@@ -707,9 +638,6 @@ begin
 			if(rreq) then
 				write(buf, HT & "RREQ");
 				write(buf, HT & "ADDR=" & to_hstring(addr));
-			end if;
-			if(or shamt) then
-				write(buf, HT & "SHAMT=" & to_hstring(shamt));
 			end if;
 			if(or rd_reg) then
 				write(buf, HT & "@RD=" & to_hstring(rd_reg));
