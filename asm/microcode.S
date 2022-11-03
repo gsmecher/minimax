@@ -58,7 +58,7 @@ microcode_entry:
 	c.mv x15, x3
 	c.andi x15, 3
 	c.mv x8, x3
-	c.andi x8, -4	/* strip LSBs and fetch */
+	/*c.andi x8, -4*/	/* strip LSBs and fetch */
 	c.lw x9, 0(x8)
 	c.mv x4, x9
 	c.beqz x15, 1f /* If aligned - that's all we needed. */
@@ -204,7 +204,7 @@ tablec:
 	c.j add_sub	/* c.0: ADD/SUB */
 	c.j sll		/* c.1: SLL */
 	c.j slt		/* c.2: SLT */
-	c.j .		/* c.3: SLTU */
+	c.j sltu	/* c.3: SLTU */
 	c.j xor		/* c.4: XOR */
 	c.j srl_sra	/* c.5: SRL/SRA */
 	c.j or		/* c.6: OR */
@@ -360,6 +360,13 @@ slt:
 	c.mv x8, x18
 	c.mv x9, x20
 	c.jal slt_func
+	x.poke 6, x8
+	c.j ret_rv32
+
+sltu:
+	c.mv x8, x18
+	c.mv x9, x20
+	c.jal sltu_func
 	x.poke 6, x8
 	c.j ret_rv32
 
@@ -604,7 +611,6 @@ jal:
 	c.mv x8, x4
 	c.srai x8, 31
 	c.srli x8, 20
-	c.and x8, x9
 	c.srai x8, 11
 	c.mv x9, x8
 
@@ -665,8 +671,3 @@ resolve_imm1:
 	c.or x8, x9
 
 	c.jr x31
-
-	/* avoids fetch-ahead metavalues in simulation - not really needed */
-	c.nop
-	c.nop
-	c.nop

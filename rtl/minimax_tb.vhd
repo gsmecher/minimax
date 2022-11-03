@@ -44,7 +44,7 @@ architecture behav of minimax_tb is
 	impure function rom_init return rom_type is
 		file f : text open read_mode is ROM_FILENAME;
 		variable l : line;
-		variable rom : rom_type;
+		variable rom : rom_type := (others => 32x"0");
 		variable good : boolean := true;
 		variable i : integer := 0;
 	begin
