@@ -20,14 +20,14 @@ implementations you should probably use reach for first.)
 
 In short:
 
-* RV32C (compressed) instructions are first-class and execute at 1 clock per
-  instruction. (Exceptions: shifts and branches.)
+* RVC (compressed) instructions are first-class and execute at 1 clock per
+  instruction. (Exceptions: branches, which have a 2-cycle "taken" penalty.)
 
-* SOME RV32I instructions are directly implemented in RTL and execute in 2
-  clocks per instruction.
+* RV32I instructions are emulated in microcode, using only RVC instructions.
+  Emulated instructions take about 80 clock ticks each.
 
-* Other RV32I instructions are emulated in microcode, using the instructions
-  above.
+Note that we have a full 32-bit shifter, so RVC shift instructions are
+efficient - unlike most "little" RISC-V cores.
 
 This is distinct from (all?) other RV32C-capable RISC-V cores, because it
 really is architected for compressed first. This is not how the compressed
@@ -45,27 +45,6 @@ A compressed-first RISC-V architecture unlocks the following:
   memory.  On Xilinx, the asymmetric ports (16-bit instruction, 32-bit data)
   are reconciled using an asymmetric block RAM primitive. As a result, we don't
   have to worry about a 32-bit instruction split across two 32-bit words.
-
-Native instructions are selected for a balance of:
-
-* Small implementation cost. We use a 2-port register file, and 3-operand
-  instructions require more ports (or more cycles and logic to share ports)
-
-* A reasonable performance baseline. Microcode traps require many clock
-  cycles, so an impoverished "direct" instruction set hurts us in two ways:
-
-  1. by requiring more traps to microcode emulation, and
-  2. by making microcode itself longer, due to an impoverished instruction
-     set.
-
-* Sufficiency. Some RV32I instructions can't be emulated using just RV32C
-  and require RTL support. (For example: word/byte stores.)
-
-We end up with the following native instructions:
-
-* C.xxx (all RV32C, except shifts that aren't 0 or 1 bit)
-* LUI, AUIPC
-* ADDI/NOP, ANDI, ORI, XORI
 
 Why is this desirable?
 
@@ -112,7 +91,7 @@ What's the design like?
 
 Resource usage (excluding ROM and peripherals; KU060; 12-bit PC):
 
-* Minimax: 54 FFs, 411 CLB LUTs
+* Minimax: 46 FFs, 425 CLB LUTs
 
 Compare to:
 
