@@ -71,7 +71,7 @@ architecture behav of minimax is
 
 	-- Writeback and deferred writeback strobes
 	signal wb : std_logic := '0';
-	signal rs_reg, rd_reg : std_logic_vector(5 downto 0) := (others => '0');
+	signal dra : std_logic_vector(4 downto 0) := (others => '0'); -- deferred register address
 	signal rf_rs1_15 : std_logic := '0';
 
 	-- Strobes for 16-bit instructions
@@ -238,9 +238,6 @@ begin
 	datapath_proc : process(clk)
 	begin
 		if rising_edge(clk) then
-			rd_reg <= (others => '0');
-			rs_reg <= (others => '0');
-
 			dly32_lui <= op32_lui;
 			dly32_auipc <= op32_auipc;
 			dly32_addi <= op32_addi;
@@ -259,19 +256,16 @@ begin
 			-- when execution occurs.
 			rf_rs1_15 <= inst(15);
 
-			-- Load and clobber instructions complete a cycle after they are
+			-- Load and setrs/setrd instructions complete a cycle after they are
 			-- initiated, so we need to keep some state.
-			rd_reg <= (('0' & regD(4 downto 0)) and op16_SLLI_SETRD)
-				or ((microcode & "01" & inst(4 downto 2)) and op16_LW)
-				or ((microcode & inst(11 downto 7)) and (op16_LWSP or op32));
-
-			rs_reg <= (('0' & regD(4 downto 0)) and op16_SLLI_SETRS)
-				or ((microcode & inst(11 downto 7)) and op16_LWSP);
+			dra <= (regD(4 downto 0) and (op16_SLLI_SETRD or op16_SLLI_SETRS))
+				or (("01" & inst(4 downto 2)) and op16_LW)
+				or ((inst(11 downto 7)) and (op16_LWSP or op32));
 		end if;
 	end process;
 
 	-- READ/WRITE register file port
-	addrD(4 downto 0) <= rd_reg(4 downto 0)
+	addrD(4 downto 0) <= (dra and (dly16_SLLI_SETRD or dly16_LW or dly16_LWSP or dly32))
 			or (5ux"01" and (op16_JAL or op16_JALR or trap)) -- write return address into ra
 			or (("01" & inst(4 downto 2)) and (op16_ADDI4SPN or op16_SW)) -- data
 			or (inst(6 downto 2) and op16_SWSP)
@@ -287,7 +281,7 @@ begin
 				or op16_SRLI or op16_SRAI));
 
 	-- READ-ONLY register file port
-	addrS(4 downto 0) <= rs_reg(4 downto 0)
+	addrS(4 downto 0) <= (dra and dly16_SLLI_SETRS)
 			or ((inst(3 downto 0) & rf_rs1_15) and (
 				dly32_addi or dly32_andi or dly32_ori or dly32_xori))
 			or (5ux"02" and (op16_ADDI4SPN or op16_LWSP or op16_SWSP))
@@ -297,8 +291,8 @@ begin
 			or (inst(6 downto 2) and ((op16_MV and not dly16_slli_setrs) or op16_ADD));
 
 	-- Select between "normal" and "microcode" register banks.
-	addrD(5) <= rd_reg(5) or trap or (microcode xor dly16_slli_setrd);
-	addrS(5) <= rs_reg(5) or trap or (microcode xor dly16_slli_setrs);
+	addrD(5) <= (microcode xor dly16_slli_setrd) or trap;
+	addrS(5) <= (microcode xor dly16_slli_setrs) or trap;
 
 	-- Look up register file contents combinatorially
 	regD <= register_file(to_integer(unsigned(addrD)));
@@ -552,11 +546,8 @@ begin
 				write(buf, HT & "RREQ");
 				write(buf, HT & "ADDR=" & to_hstring(addr));
 			end if;
-			if(or rd_reg) then
-				write(buf, HT & "@RD=" & to_hstring(rd_reg));
-			end if;
-			if(or rs_reg) then
-				write(buf, HT & "@RS=" & to_hstring(rs_reg));
+			if(or dra) then
+				write(buf, HT & "@DRA=" & to_hstring(dra));
 			end if;
 			writeline(output, buf);
 
