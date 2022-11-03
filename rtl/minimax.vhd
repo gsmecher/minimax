@@ -173,7 +173,7 @@ begin
 
 	-- Data bus outputs tap directly off register/ALU path.
 	wdata <= regD;
-	addr <= aluX(addr'range);
+	addr <= std_logic_vector(aluS(addr'range));
 	rreq <= op16_LWSP or op16_LW;
 	wmask <= x"f" and (op16_SWSP or op16_SW);
 
@@ -289,8 +289,8 @@ begin
 	aluS <= std_logic_vector(signed(aluA) - signed(aluB)) when op16_SUB
 		else std_logic_vector(signed(aluA) + signed(aluB));
 
-	-- ALU output multiplexer. The adder path (which is deep) must be kept
-	-- separate from the shifter path (which is also deep).
+	-- ALU output multiplexer. The adder path (which is deep) must run
+	-- parallel to the shifter path (which is also deep).
 	aluX <= (aluS and (
 			op16_ADD or op16_SUB or op16_ADDI
 			or op16_LI or op16_LUI
