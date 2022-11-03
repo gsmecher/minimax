@@ -56,7 +56,6 @@ architecture behav of minimax is
 	-- Register file address ports
 	signal addrS, addrD : std_logic_vector(5 downto 0);
 	signal regS, regD, aluA, aluB, aluS, aluX, Dnext : std_logic_vector(31 downto 0); -- datapath
-	signal aluZ : std_logic; -- Zero flag
 
 	-- Program counter
 	signal pc_fetch, pc_fetch_dly, pc_execute : unsigned(PC_BITS-1 downto 1) := (others => '0');
@@ -201,8 +200,8 @@ begin
 	-- PC logic
 	bubble <= bubble1 or bubble2;
 
-	branch_taken <= (op16_BEQZ and aluZ)
-		or (op16_BNEZ and not aluZ)
+	branch_taken <= (op16_BEQZ and (nor regS))
+		or (op16_BNEZ and (or regS))
 		or op16_J or op16_JAL or op16_JR or op16_JALR
 		or op16_SLLI_THUNK;
 
@@ -325,8 +324,6 @@ begin
 	-- This synthesizes into 4 CARRY8s - no need for manual xor/cin heroics
 	aluS <= std_logic_vector(signed(aluA) - signed(aluB)) when op16_SUB
 		else std_logic_vector(signed(aluA) + signed(aluB));
-
-	aluZ <= nor aluS;
 
 	aluX <= (aluS and (
 			op16_ADD or op16_SUB or op16_ADDI
