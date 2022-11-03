@@ -351,7 +351,7 @@ begin
 
 	-- Address Generation Unit (AGU)
 
-	aguA <= (pc_fetch and not (op16_JR or op16_JALR or trap or branch_taken))
+	aguA <= (pc_fetch and not (trap or branch_taken))
 		or (pc_execute and branch_taken and not (op16_JR or op16_JALR or op16_slli_thunk));
 
 	aguB <= (unsigned(regS(aguB'range)) and (op16_JR or op16_JALR or op16_slli_thunk))
