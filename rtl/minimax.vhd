@@ -55,7 +55,7 @@ architecture behav of minimax is
 
 	-- Register file address ports
 	signal addrS, addrD : std_logic_vector(5 downto 0);
-	signal regS, regD, aluA, aluB, aluS, aluX, Dnext : std_logic_vector(31 downto 0); -- datapath
+	signal regS, regD, aluA, aluB, aluS, aluX : std_logic_vector(31 downto 0); -- datapath
 
 	-- Program counter
 	signal pc_fetch, pc_fetch_dly, pc_execute : unsigned(PC_BITS-1 downto 1) := (others => '0');
@@ -190,7 +190,7 @@ begin
 
 	-- Data bus outputs tap directly off register/ALU path.
 	wdata <= regD;
-	addr <= aluX(addr'range);
+	addr <= aluS(addr'range);
 	rreq <= op16_LWSP or op16_LW;
 	wmask <= x"f" and (op16_SWSP or op16_SW);
 
@@ -332,22 +332,16 @@ begin
 			or op32_AUIPC or dly32_AUIPC
 			or op32_ADDI or dly32_ADDI
 			or op16_ADDI4SPN or op16_ADDI16SP
-			or op16_LW or op16_SW
-			or op16_LWSP or op16_SWSP
-			or op16_MV
 			or op16_SLLI)) or
 		(((op16_srai and aluA(31)) & aluA(31 downto 1)) and (op16_SRAI or op16_SRLI)) or
 		((aluA and aluB) and (op16_ANDI or op16_AND or dly32_andi)) or
 		((aluA xor aluB) and (op16_XOR or dly32_xori)) or
-		((aluA or aluB) and (op16_OR or dly32_ori)) or
-		((aluA(15 downto 0) & aluA(31 downto 16)) and op16_SLLI_SWAP);
-
-	Dnext <= (rdata and (dly16_lw or dly16_lwsp))
-		or (std_logic_vector(resize(pc_fetch_dly & "0", 32) and (op16_JAL or op16_JALR or trap))) -- instruction following the jump (hence _dly)
-		or aluX(addr'range);
+		((aluA or aluB) and (op16_OR or dly32_ori or op16_MV)) or
+		((aluA(15 downto 0) & aluA(31 downto 16)) and op16_SLLI_SWAP) or
+		(rdata and (dly16_lw or dly16_lwsp)) or
+		(std_logic_vector(resize(pc_fetch_dly & "0", 32) and (op16_JAL or op16_JALR or trap))); -- instruction following the jump (hence _dly)
 
 	-- Address Generation Unit (AGU)
-
 	aguA <= (pc_fetch and not (trap or branch_taken))
 		or (pc_execute and branch_taken and not (op16_JR or op16_JALR or op16_slli_thunk));
 
@@ -378,7 +372,7 @@ begin
 		if rising_edge(clk) then
 			-- writeback
 			if (or addrD(4 downto 0)) and wb then
-				register_file(to_integer(unsigned(addrD))) <= Dnext;
+				register_file(to_integer(unsigned(addrD))) <= aluX;
 			end if;
 		end if;
 	end process;
@@ -407,8 +401,7 @@ begin
 				& "aluA" & HT & HT
 				& "aluB" & HT & HT
 				& "aluS" & HT & HT
-				& "aluX" & HT & HT
-				& "Dnext");
+				& "aluX");
 			writeline(output, buf);
 		end if;
 		wait;
@@ -513,8 +506,6 @@ begin
 			write(buf, HT & to_hstring(aluB));
 			write(buf, HT & to_hstring(aluS));
 			write(buf, HT & to_hstring(aluX));
-
-			write(buf, HT & to_hstring(Dnext));
 
 			if trap then
 				write(buf, HT & "TRAP");
