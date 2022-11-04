@@ -19,6 +19,15 @@ add_files -fileset sources_1 [list			\
 	[file normalize "../rtl/minimax.vhd"]		\
 	[file normalize "../rtl/minimax_tb.vhd"]	\
 ]
-
 set_property file_type "VHDL 2008" -objects [get_files -of_objects [get_filesets sources_1]]
+set_property top minimax [current_fileset]
+
+# Constraints - these inject a nominal clock only, and leave I/O placements up
+# to the placer. As a result, Fmax estimates are pessimistic because routing
+# delays are dominated by routes to I/Os.
+add_files -fileset constrs_1 minimax.xdc
+
+# Ensure we're aggressively optimizing
+set_property STEPS.SYNTH_DESIGN.ARGS.DIRECTIVE AreaOptimized_high [get_runs synth_1]
+
 start_gui
