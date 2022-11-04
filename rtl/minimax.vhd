@@ -284,24 +284,17 @@ begin
 		or ((std_logic_vector'(31 downto 17 => inst(12)) & inst(6 downto 2) & 12x"0") and op16_LUI)
 		or ((std_logic_vector'(31 downto 9 => inst(12)) & inst(4 downto 3) & inst(5) & inst(2) & inst(6) & x"0") and op16_ADDI16SP);
 
-	-- Adder coupled to regA and regB
 	-- This synthesizes into 4 CARRY8s - no need for manual xor/cin heroics
 	aluS <= std_logic_vector(signed(aluA) - signed(aluB)) when op16_SUB
 		else std_logic_vector(signed(aluA) + signed(aluB));
 
 	-- ALU output multiplexer. The adder path (which is deep) must run
 	-- parallel to the shifter path (which is also deep).
-	aluX <= (aluS and (
-			op16_ADD or op16_SUB or op16_ADDI
-			or op16_LI or op16_LUI
-			or op16_ADDI4SPN or op16_ADDI16SP
-			or op16_LW or op16_SW
-			or op16_LWSP or op16_SWSP
-			or op16_MV)) or
+	aluX <= (aluS and (op16_ADD or op16_SUB or op16_ADDI or op16_ADDI4SPN or op16_ADDI16SP)) or
 		(shift_output and (op16_slli or op16_srli or op16_srai)) or
 		((aluA and aluB) and (op16_ANDI or op16_AND)) or
 		((aluA xor aluB) and op16_XOR) or
-		((aluA or aluB) and op16_OR) or
+		((aluA or aluB) and (op16_OR or op16_MV or op16_LI or op16_LUI)) or
 		(rdata and (dly16_lw or dly16_lwsp)) or
 		(std_logic_vector(resize(pc_fetch_dly & "0", 32) and (op16_JAL or op16_JALR or trap))); -- instruction following the jump (hence _dly)
 
@@ -312,7 +305,7 @@ begin
 
 	aguB <= (unsigned(regS(aguB'range)) and (op16_JR or op16_JALR or op16_slli_thunk))
 		or unsigned((std_logic_vector'(aguB'high downto 11 => inst(12)) & inst(8) & inst(10 downto 9) & inst(6) & inst(7) & inst(2) & inst(11) & inst(5 downto 3))
-			and branch_taken and (op16_J or op16_JAL))
+			and (op16_J or op16_JAL))
 		or unsigned((std_logic_vector'(aguB'high downto 8 => inst(12)) & inst(6 downto 5) & inst(2) & inst(11 downto 10) & inst(4 downto 3))
 			and branch_taken and (op16_BNEZ or op16_BEQZ))
 		or (unsigned(UC_BASE(pc_fetch'range)) and trap);
