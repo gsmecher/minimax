@@ -41,13 +41,13 @@ $(TESTS): dirs $$@/pass
 	touch $@
 
 # .mem generator
-%/minimax.rom: %/a.out bin2mem
+%/minimax.rom: %/a.out
 	$(CROSS_OBJCOPY) -O binary $< $@.bin
-	./bin2mem $@.bin $@
+	../asm/bin2mem $@.bin $@
 
 # Linker
 %/a.out: %.o microcode.o
-	$(CROSS_CC) $(LDFLAGS) -T bare.ld -o $@ $< microcode.o
+	$(CROSS_CC) $(LDFLAGS) -T ../asm/bare.ld -o $@ $^
 
 # Assembler
 %.o: %.S
