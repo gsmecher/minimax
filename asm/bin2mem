@@ -7,5 +7,5 @@ import numpy as np
 
 if __name__=='__main__':
     with open(sys.argv[1], 'rb') as fi, open(sys.argv[2], 'w') as fo:
-        ai = np.fromfile(fi, dtype=np.uint32)
-        fo.writelines('%08X\n' % x for x in ai)
+        ai = np.fromfile(fi, dtype=np.uint16)
+        fo.writelines('%04X\n' % x for x in ai)

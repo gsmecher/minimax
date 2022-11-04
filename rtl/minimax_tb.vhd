@@ -44,14 +44,26 @@ architecture behav of minimax_tb is
 	impure function rom_init return rom_type is
 		file f : text open read_mode is ROM_FILENAME;
 		variable l : line;
+		variable v16 : std_logic_vector(15 downto 0);
 		variable rom : rom_type := (others => 32x"0");
 		variable good : boolean := true;
 		variable i : integer := 0;
 	begin
 		while not endfile(f) loop
 			readline(f, l);
-			hread(l, rom(i), good);
+			hread(l, v16, good);
 			assert good severity failure;
+			rom(i)(15 downto 0) := v16;
+
+			-- Could be an odd number of lines in the file
+			if endfile(f) then
+				exit;
+			end if;
+			readline(f, l);
+			hread(l, v16, good);
+			assert good severity failure;
+			rom(i)(31 downto 16) := v16;
+
 			i := i + 1;
 		end loop;
 
