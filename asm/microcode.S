@@ -54,15 +54,18 @@
 
 microcode_entry:
 	/* Trapping stores PC+2 in RA. Correct it. */
-	addi x3, ra, -2
+	c.mv x3, ra
+	c.addi x3, -2
 
 	/* Hot path - we want to detect and emulate 16-bit SRLI/SRAI/SLLI
 	 * opcodes as quickly as possible, since they are the only RVC
 	 * instructions that aren't directly implemented. */
 
 	/* Fetch instruction, which may be half-word aligned. */
-	andi x15, x3, 3
-	andi x8, x3, -4	/* strip LSBs and fetch */
+	c.mv x15, x3
+	c.andi x15, 3
+	c.mv x8, x3
+	c.andi x8, -4	/* strip LSBs and fetch */
 	c.lw x9, 0(x8)
 	c.beqz x15, 1f
 
@@ -70,13 +73,17 @@ microcode_entry:
 	x.swap 9
 
 	/* code paths re-join, with lower 16 bits of instruction in x9 */
-1:	andi x10, x9, 3 /* select quadrant */
+1:	c.mv x10, x9
+	c.andi x10, 3 /* select quadrant */
 	c.slli x10, 1 /* 1 RVC opcode per table entry */
-	la x11, qjt
-	c.add x10, x11
-	c.jr x10
 
-qjt:	/* Quadrant jump table */
+	/* Table jump */
+	c.jal .+2
+	c.addi ra, 6 /* offset to table base */
+	c.add ra, x10
+	c.jr ra
+
+	/* Quadrant jump table */
 	c.j . /* error - quadrant 0 is directly implemented in RTL */
 	c.j op16_srai_srli
 	c.j op16_slli
@@ -87,7 +94,8 @@ op32:	/* Complete assembling the 32-bit opcode and unroll the 16-bit fastpath */
 	c.beqz x15, 1f
 
 	/* Split instruction - fetch the other half and assemble */
-	li x11, 0xffff
+	c.lui x11, 0x10
+	c.addi x11, -1 /* 0xffff */
 	c.and x9, x11
 
 	c.lw x10, 4(x8)
@@ -103,22 +111,21 @@ op16_shamt_x11:
 	c.srli x9, 1
 	c.srli x9, 1
 
-	/* Isolate 32-shamt into x11, shifted by 2 in anticipation of a table jump */
-	andi x10, x9, 31
-	li x11, 32
-	c.sub x11, x10
-	c.slli x11, 1
+	/* Isolate shamt into x11 */
+	c.mv x11, x9
+	c.andi x11, 31
 
 .rept 5
 	c.srli x9, 1
 .endr
 	c.jr ra
-	
+
 op16_srai_srli:
 	c.jal op16_shamt_x11
 
 	/* isolate rd' into rd, stored in x12 */
-	andi x12, x9, 0x7
+	c.mv x12, x9
+	c.andi x12, 0x7
 	c.addi x12, 8
 
 	/* fetch register value into x8 */
@@ -128,15 +135,15 @@ op16_srai_srli:
 	c.andi x9, 8
 	c.beqz x9, 1f
 
-	la x9, srai32
+	c.mv x9, x11
+	c.jal srai_dyn
 	c.j 2f
 
-1:	la x9, srli32
+1:	c.mv x9, x11
+	c.jal srli_dyn
 
 	/* code paths rejoin */
-2:	c.add x9, x11
-	c.jalr x9
-
+2:
 	/* Write back and thunk */
 	x.poke 12, x8
 	c.addi x3, 2
@@ -146,19 +153,35 @@ op16_slli:
 	c.jal op16_shamt_x11
 
 	/* isolate rd, stored in x12 */
-	andi x12, x9, 31
+	c.mv x12, x9
+	c.andi x12, 31
 
 	/* fetch register value into x8 */
 	x.peek x8, 12
-
-	la x9, slli32
-	c.add x9, x11
-	c.jalr x9
+	c.mv x9, x11
+	c.jal slli_dyn
 
 	/* Write back and thunk */
 	x.poke 12, x8
 	c.addi x3, 2
 	x.thunk 3
+
+srai_dyn: /* jump table POE. Trashes x15 */
+	c.li x15, 16
+	c.slli x15, 1 /* Form 2*(32-x9) for the jump table */
+	c.sub x15, x9
+	c.slli x15, 1
+	c.mv x9, x15
+
+	/* Table jump */
+	c.mv x15, ra
+	c.jal .+2
+	c.addi ra, 8
+	c.add ra, x9
+	c.jalr ra
+	c.jr x15
+
+	/* JUMP TABLE - FORBIDDEN ZONE */
 
 srai32:	c.srai x8, 1
 srai31:	c.srai x8, 1
@@ -194,6 +217,23 @@ srai2:	c.srai x8, 1
 srai1:	c.srai x8, 1
 	c.jr ra
 
+srli_dyn: /* jump table POE. Trashes x15 */
+	c.li x15, 16
+	c.slli x15, 1 /* Form 2*(32-x9) for the jump table */
+	c.sub x15, x9
+	c.slli x15, 1
+	c.mv x9, x15
+
+	/* Table jump */
+	c.mv x15, ra
+	c.jal .+2
+	c.addi ra, 8
+	c.add ra, x9
+	c.jalr ra
+	c.jr x15
+
+	/* JUMP TABLE - FORBIDDEN ZONE */
+
 srli32:	c.srli x8, 1
 srli31:	c.srli x8, 1
 srli30:	c.srli x8, 1
@@ -227,6 +267,23 @@ srli3:	c.srli x8, 1
 srli2:	c.srli x8, 1
 srli1:	c.srli x8, 1
 	c.jr ra
+
+slli_dyn: /* jump table POE. Trashes x15 */
+	c.li x15, 16
+	c.slli x15, 1 /* Form 2*(32-x9) for the jump table */
+	c.sub x15, x9
+	c.slli x15, 1
+	c.mv x9, x15
+
+	/* Table jump */
+	c.mv x15, ra
+	c.jal .+2
+	c.addi ra, 8
+	c.add ra, x9
+	c.jalr ra
+	c.jr x15
+
+	/* JUMP TABLE - FORBIDDEN ZONE */
 
 slli32:	c.slli x8, 1
 slli31:	c.slli x8, 1
@@ -268,27 +325,37 @@ op32_entry:
 1:	/* Isolate opcode into x5 - note we strip the lower bits, which are always 11 */
 	c.srli x8, 1
 	c.srli x8, 1
-	andi x5, x8, 0x1f
+	c.mv x9, x8
+	c.andi x9, 0x1f
+	c.mv x5, x9
 
 	/* Isolate rd */
 	c.jal srli5
-	andi x6, x8, 0x1f
+	c.mv x9, x8
+	c.andi x9, 0x1f
+	c.mv x6, x9
 
 	/* isolate funct3, left shifted by 1 for jump tables */
-	c.jal srli4
-	andi x16, x8, 0xe
-	c.srli x8, 1
+	c.jal srli5
+	c.mv x9, x8
+	c.andi x9, 0x7
+	c.slli x9, 1
+	c.mv x16, x9
 
 	/* isolate rs1 */
 	c.jal srli3
-	andi x17, x8, 0x1f
+	c.mv x9, x8
+	c.andi x9, 0x1f
+	c.mv x17, x9
 
 	/* look up rs1 value from register file (we mostly need it) */
 	x.peek x18, 17
 
 	/* isolate rs2/shamt */
 	c.jal srli5
-	andi x19, x8, 0x1f
+	c.mv x9, x8
+	c.andi x9, 0x1f
+	c.mv x19, x9
 
 	/* look up rs2 value from register file (we sometimes need it) */
 	x.peek x20, 19
@@ -297,118 +364,132 @@ op32_entry:
 	c.mv x8, x5
 	c.slli x8, 1 /* 1 compressed instruction per opcode */
 
-	la x9, table_opcode
-	c.add x8, x9
-	c.jr x8
+	/* Table jump */
+	c.jal .+2
+	c.addi ra, 6 /* offset to table base */
+	c.add ra, x8
+	c.jr ra
 
-fail:	c.j fail
-
-	/* FIXME: this should not be necessary */
-	c.nop
-
-table_opcode:
 	c.j table0	/* 0 */
-	c.j fail	/* 1 */
-	c.j fail	/* 2 */
-	c.j fail	/* 3 */
+	c.j .		/* 1 */
+	c.j .		/* 2 */
+	c.j .		/* 3 */
 	c.j table4	/* 4 */
-	c.j fail	/* 5 */
-	c.j fail	/* 6 */
-	c.j fail	/* 7 */
+	c.j auipc	/* 5 */
+	c.j .		/* 6 */
+	c.j .		/* 7 */
 	c.j table8	/* 8 */
-	c.j fail	/* 9 */
-	c.j fail	/* a */
-	c.j fail	/* b */
+	c.j .		/* 9 */
+	c.j .		/* a */
+	c.j .		/* b */
 	c.j tablec	/* c */
-	c.j fail	/* d */
-	c.j fail	/* e */
-	c.j fail	/* f */
-	c.j fail	/* 10 */
-	c.j fail	/* 11 */
-	c.j fail	/* 12 */
-	c.j fail	/* 13 */
-	c.j fail	/* 14 */
-	c.j fail	/* 15 */
-	c.j fail	/* 16 */
-	c.j fail	/* 17 */
+	c.j lui		/* d */
+	c.j .		/* e */
+	c.j .		/* f */
+	c.j .		/* 10 */
+	c.j .		/* 11 */
+	c.j .		/* 12 */
+	c.j .		/* 13 */
+	c.j .		/* 14 */
+	c.j .		/* 15 */
+	c.j .		/* 16 */
+	c.j .		/* 17 */
 	c.j table18	/* 18 */
 	c.j jalr	/* 19 */
-	c.j fail	/* 1a */
+	c.j .		/* 1a */
 	c.j jal		/* 1b */
-	c.j fail	/* 1c */
-	c.j fail	/* 1d */
-	c.j fail	/* 1e */
-	c.j fail	/* 1f */
+	c.j .		/* 1c */
+	c.j .		/* 1d */
+	c.j .		/* 1e */
+	c.j .		/* 1f */
 
 table0:
-	la x9, 1f
-	c.add x9, x16
-	c.jr x9
+	c.jal .+2
+	c.addi ra, 6 /* offset to table base */
+	c.add ra, x16
+	c.jr ra
 
-1:	c.j lb /* 0.0: LB */
-	c.j lh /* 0.1: LH */
-	c.j lw /* 0.2: LW */
-	c.j fail /* 0.3: FENCE */
-	c.j lbu /* 0.4: LBU */
-	c.j lhu /* 0.5: LHU*/
-	c.j fail /* 0.6: */
-	c.j fail /* 0.7: */
+	c.j lb	/* 0.0: LB */
+	c.j lh	/* 0.1: LH */
+	c.j lw	/* 0.2: LW */
+	c.j .	/* 0.3: FENCE */
+	c.j lbu	/* 0.4: LBU */
+	c.j lhu	/* 0.5: LHU*/
+	c.j .	/* 0.6: */
+	c.j .	/* 0.7: */
 
 table4:
-	la x9, 1f
-	c.add x9, x16
-	c.jr x9
+	c.jal .+2
+	c.addi ra, 6 /* offset to table base */
+	c.add ra, x16
+	c.jr ra
 
-1:	c.j fail /* 4.0: ADDI - implemented in RTL */
-	c.j slli /* 4.1: SLLI - implemented in RTL */
-	c.j slti /* 4.2: SLTI */
-	c.j sltiu /* 4.3: SLTIU */
-	c.j fail /* 4.4: XORI - implemented in RTL */
-	c.j srli_srai /* 4.5: SRLI/SRAI - implemented in RTL */
-	c.j fail /* 4.6: ORI - implemented in RTL */
-	c.j fail /* 4.7: ANDI - implemented in RTL */
+	c.j addi	/* 4.0: ADDI */
+	c.j slli	/* 4.1: SLLI */
+	c.j slti	/* 4.2: SLTI */
+	c.j sltiu	/* 4.3: SLTIU */
+	c.j xori	/* 4.4: XORI */
+	c.j srli_srai	/* 4.5: SRLI/SRAI */
+	c.j ori		/* 4.6: ORI */
+	c.j andi	/* 4.7: ANDI */
 
 table8:
-	la x9, 1f
-	c.add x9, x16
-	c.jr x9
+	c.jal .+2
+	c.addi ra, 6 /* offset to table base */
+	c.add ra, x16
+	c.jr ra
 
-1:	c.j fail /* 8.0: SB */
-	c.j fail /* 8.1: SH */
-	c.j sw /* 8.2: SW */
-	c.j fail /* 8.3: */
-	c.j fail /* 8.4: */
-	c.j fail /* 8.5: */
-	c.j fail /* 8.6: */
-	c.j fail /* 8.7: */
+	c.j .	/* 8.0: SB */
+	c.j .	/* 8.1: SH */
+	c.j sw	/* 8.2: SW */
+	c.j .	/* 8.3: */
+	c.j .	/* 8.4: */
+	c.j .	/* 8.5: */
+	c.j .	/* 8.6: */
+	c.j .	/* 8.7: */
 
 tablec:
-	la x9, 1f
-	c.add x9, x16
-	c.jr x9
+	c.jal .+2
+	c.addi ra, 6 /* offset to table base */
+	c.add ra, x16
+	c.jr ra
 
-1:	c.j add_sub /* c.0: ADD/SUB */
-	c.j sll /* c.1: SLL */
-	c.j slt /* c.2: SLT */
-	c.j fail /* c.3: SLTU */
-	c.j xor /* c.4: XOR */
-	c.j srl_sra /* c.5: SRL/SRA - implemented in RTL */
-	c.j or /* c.6: OR */
-	c.j and /* c.7: AND */
+	c.j add_sub	/* c.0: ADD/SUB */
+	c.j sll		/* c.1: SLL */
+	c.j slt		/* c.2: SLT */
+	c.j sltu	/* c.3: SLTU */
+	c.j xor		/* c.4: XOR */
+	c.j srl_sra	/* c.5: SRL/SRA */
+	c.j or		/* c.6: OR */
+	c.j and		/* c.7: AND */
 
 table18:
-	la x9, 1f
-	c.add x9, x16
-	c.jr x9
+	c.jal .+2
+	c.addi ra, 6 /* offset to table base */
+	c.add ra, x16
+	c.jr ra
 
-1:	c.j beq /* 18.0: BEQ */
-	c.j bne /* 18.1: BNE */
-	c.j fail /* 18.2: */
-	c.j fail /* 18.3: */
-	c.j blt /* 18.4: BLT */
-	c.j bge /* 18.5: BGE */
-	c.j bltu /* 18.6: BLTU */
-	c.j bgeu /* 18.7: BGEU */
+	c.j beq		/* 18.0: BEQ */
+	c.j bne		/* 18.1: BNE */
+	c.j .		/* 18.2: */
+	c.j .		/* 18.3: */
+	c.j blt		/* 18.4: BLT */
+	c.j bge		/* 18.5: BGE */
+	c.j bltu	/* 18.6: BLTU */
+	c.j bgeu	/* 18.7: BGEU */
+
+lui:	c.mv x8, x4
+	c.jal srli12
+	c.jal slli12
+	x.poke 6, x8
+	c.j ret_rv32
+
+auipc:	c.mv x8, x4
+	c.jal srli12
+	c.jal slli12
+	c.add x8, x3
+	x.poke 6, x8
+	c.j ret_rv32
 
 /*
  * FIXME: loads do not gracefully handle misaligned addresses.
@@ -419,19 +500,19 @@ lb:	c.jal load_form_address
 
 	c.addi x9, -3
 1:	c.beqz x9, 3f
-2:	jal slli8
+2:	c.jal slli8
 	c.addi x9, 1
 	c.bnez x9, 2b
 
-3:	jal srai24
+3:	c.jal srai24
 	x.poke 6, x8
 	c.j ret_rv32
 
 lh:	c.jal load_form_address
 	c.lw x8, 0(x8)
 	c.bnez x9, 1f
-	jal slli16
-1:	jal srai16
+	c.jal slli16
+1:	c.jal srai16
 	x.poke 6, x8
 	c.j ret_rv32
 
@@ -445,11 +526,11 @@ lbu:	c.jal load_form_address
 
 	c.addi x9, -3
 1:	c.beqz x9, 3f
-2:	jal slli8
+2:	c.jal slli8
 	c.addi x9, 1
 	c.bnez x9, 2b
 
-3:	jal srli24
+3:	c.jal srli24
 	x.poke 6, x8
 	c.j ret_rv32
 
@@ -457,8 +538,8 @@ lbu:	c.jal load_form_address
 lhu:	c.jal load_form_address
 	c.lw x8, 0(x8)
 	c.bnez x9, 1f
-	jal slli16
-1:	jal srli16
+	c.jal slli16
+1:	c.jal srli16
 	x.poke 6, x8
 	c.j ret_rv32
 
@@ -467,11 +548,12 @@ load_form_address:
 
 	# x8 -> 32-bit address, possibly unaligned
 	c.mv x8, x4
-	jal srai20
+	c.jal srai20
 	c.add x8, x18
 
 	# x8 -> 32-bit address; x9 -> address LSBs
-	andi x9, x8, 3
+	c.mv x9, x8
+	c.andi x9, 3
 	c.andi x8, -4
 
 	c.jr x31
@@ -534,35 +616,69 @@ slt:
 	x.poke 6, x8
 	c.j ret_rv32
 
+sltu:
+	c.mv x8, x18
+	c.mv x9, x20
+	c.jal sltu_func
+	x.poke 6, x8
+	c.j ret_rv32
+
+addi:	c.mv x8, x4
+	c.jal srai20
+	c.add x8, x18
+	x.poke 6, x8
+	c.j ret_rv32
+
+andi:	c.mv x8, x4
+	c.jal srai20
+	c.mv x9, x18
+	c.and x8, x9
+	x.poke 6, x8
+	c.j ret_rv32
+
+ori:	c.mv x8, x4
+	c.jal srai20
+	c.mv x9, x18
+	c.or x8, x9
+	x.poke 6, x8
+	c.j ret_rv32
+
+xori:	c.mv x8, x4
+	c.jal srai20
+	c.mv x9, x18
+	c.xor x8, x9
+	x.poke 6, x8
+	c.j ret_rv32
+
 slli:
 	c.mv x8, x18
-	andi x9, x19, 31 /* lower 5 bits' shift only */
-	li x10, 32
-	c.sub x10, x9
-	c.slli x10, 1
-	la x15, slli32
-	c.add x15, x10
-	c.jalr x15
+	c.mv x9, x19
+	c.jal slli_dyn
 	x.poke 6, x8
 	c.j ret_rv32
 
 srli_srai:
+	/* Set up operands */
+	c.mv x8, x18
+	c.mv x9, x19
+
 	/* disambiguate srl/sra */
 	c.mv x10, x4
-	li x11, 0x40000000
-	c.and x10, x11
-	la x15, srli32
-	c.beqz x10, 1f
-	la x15, srai32
-1:
-	c.mv x8, x18
-	andi x9, x19, 31 /* lower 5 bits' shift only */
-	li x10, 32
-	c.sub x10, x9
-	c.slli x10, 1
-	c.add x15, x10
-	c.jalr x15
-	x.poke 6, x8
+	c.mv x11, x4
+
+	c.slli x11, 1
+	c.slli x11, 1
+	c.srli x11, 1
+	c.srli x11, 1
+	c.xor x11, x10
+	c.beqz x11, 1f
+
+	c.jal srai_dyn
+	c.j 2f
+
+1:	c.jal srli_dyn
+
+2:	x.poke 6, x8
 	c.j ret_rv32
 
 slti:
@@ -590,7 +706,12 @@ bge:
 	c.mv x9, x20
 	c.sub x8, x9
 
-	lui x9, 0x80000
+	/* Form 0x80000 */
+	c.lui x9, 0x10
+	c.slli x9, 1
+	c.slli x9, 1
+	c.slli x9, 1
+
 	c.and x8, x9
 	c.bnez x8, 1f /* branch not taken */
 
@@ -619,17 +740,17 @@ slt_func: /* clobbers x10, x11 */
 
 	/* Compare MSBs */
 	c.mv x10, x8
-	c.xor x10, x9
-	li x11, 0x80000000
-	c.and x10, x11
-	c.beqz x10, 1f
+	c.xor x8, x9
+	c.jal srli31
+	c.beqz x8, 1f
 
 	/* MSBs differed: right-shift to avoid overflow */
-	c.srai x8, 1
+	c.srai x10, 1
 	c.srai x9, 1
 
 1:	/* MSBs were the same. Compare directly. */
-	c.sub x8, x9
+	c.sub x10, x9
+	c.mv x8, x10
 	c.jal srli31
 
 	c.jr x31
@@ -639,17 +760,17 @@ sltu_func: /* clobbers x10, x11 */
 
 	/* Compare MSBs */
 	c.mv x10, x8
-	c.xor x10, x9
-	li x11, 0x80000000
-	c.and x10, x11
-	c.beqz x10, 1f
+	c.xor x8, x9
+	c.jal srli31
+	c.beqz x8, 1f
 
 	/* MSBs differed: right-shift to avoid overflow */
-	c.srli x8, 1
+	c.srli x10, 1
 	c.srli x9, 1
 
 1:	/* MSBs were the same. Compare directly. */
-	c.sub x8, x9
+	c.sub x10, x9
+	c.mv x8, x10
 	c.jal srli31
 
 	c.jr x31
@@ -674,8 +795,13 @@ add_sub:
 
 	/* disambiguate add/sub */
 	c.mv x10, x4
-	li x11, 0x40000000
-	c.and x10, x11
+	c.mv x11, x4
+	c.slli x11, 1
+	c.slli x11, 1
+	c.srli x11, 1
+	c.srli x11, 1
+	c.sub x10, x11
+
 	c.beqz x10, 1f
 	c.li x10, -1
 	c.xor x9, x10
@@ -687,34 +813,18 @@ add_sub:
 
 sll:
 	c.mv x8, x18
-	andi x9, x20, 31 /* lower 5 bits' shift only */
-	li x10, 32
-	c.sub x10, x9
-	c.slli x10, 1
-	la x15, slli32
-	c.add x15, x10
-	c.jalr x15
+	c.mv x9, x20
+	c.andi x9, 31
+	c.jal slli_dyn
 	x.poke 6, x8
 	c.j ret_rv32
 
 srl_sra:
-	/* disambiguate srl/sra */
-	c.mv x10, x4
-	li x11, 0x40000000
-	c.and x10, x11
-	la x15, srli32
-	c.beqz x10, 1f
-	la x15, srai32
-1:
-	c.mv x8, x18
-	andi x9, x20, 31 /* lower 5 bits' shift only */
-	li x10, 32
-	c.sub x10, x9
-	c.slli x10, 1
-	c.add x15, x10
-	c.jalr x15
-	x.poke 6, x8
-	c.j ret_rv32
+	/* Cheat by leveraging srli_srai */
+	c.mv x8, x20
+	c.andi x8, 31
+	c.mv x19, x8
+	c.j srli_srai
 
 xor:
 	c.mv x8, x18
@@ -755,19 +865,23 @@ jalr:
 jal:
 	/* sign extend into imm[20] */
 	c.mv x8, x4
-	li x9, 0x80000000
-	c.and x8, x9
-	c.jal srai11
+	c.jal srai32
+	c.jal srli20
 	c.mv x9, x8
 
 	/* imm[19:12] */
+	c.lui x8, 0x1f /* 0x1f000 */
+	c.jal slli3
+	c.lui x10, 0x7
+	c.or x10, x8 /* form 0xff000 */
+
 	c.mv x8, x4
-	li x10, 0x000ff000
 	c.and x8, x10
 	c.or x9, x8
 
 	/* imm[11] */
-	andi x8, x19, 1
+	c.mv x8, x19
+	c.andi x8, 1
 	c.jal slli11
 	c.or x9, x8
 
@@ -792,30 +906,26 @@ resolve_imm1:
 
 	/* Signed immediate per BEQ and friends into x8; x9, x10, x31 destroyed */
 	c.mv x8, x4
-	li x9, 0x80000000
-	c.and x8, x9
-	c.jal srai19 /* sign extend into imm[12] */
+	c.jal srai31
+	c.jal slli12 /* sign extend into imm[12] */
 	c.mv x9, x8
 
 	/* pick imm[11] */
-	andi x8, x6, 1
+	c.mv x8, x6
+	c.andi x8, 1
 	c.jal slli11
 	c.or x9, x8
 
 	/* pick imm[10:5] */
 	c.mv x8, x4
-	li x10, 0x7e000000
-	c.and x8, x10
-	c.jal srli20
+	c.slli x8, 1
+	c.jal srli26
+	c.jal slli5
 	c.or x9, x8
 
 	/* pick imm[4:1] */
-	andi x8, x6, 0x1e /* mask LSB */
+	c.mv x8, x6
+	c.andi x8, 0x1e /* mask LSB */
 	c.or x8, x9
 
 	c.jr x31
-
-	/* avoids fetch-ahead metavalues in simulation - not really needed */
-	c.nop
-	c.nop
-	c.nop
