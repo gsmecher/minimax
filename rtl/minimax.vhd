@@ -108,48 +108,46 @@ architecture behav of minimax is
 	signal op16_slli_setrd, dly16_slli_setrd : std_logic := '0';
 	signal op16_slli_setrs, dly16_slli_setrs : std_logic := '0';
 	signal op16_slli_thunk : std_logic := '0';
-	signal op16_slli_swap : std_logic := '0';
 
 	-- Strobes for 32-bit instructions
 	signal op32 : std_logic := '0';
 
 begin
 	-- From 16.8 (RVC Instruction Set Listings)
-	op16_addi4spn	<= inst ?= b"000_-_-----_-----_00" and not (bubble);
-	op16_lw		<= inst ?= b"010_-_-----_-----_00" and not (bubble);
-	op16_sw		<= inst ?= b"110_-_-----_-----_00" and not (bubble);
+	op16_addi4spn	<= inst ?= b"000_-_-----_-----_00" and not bubble;
+	op16_lw		<= inst ?= b"010_-_-----_-----_00" and not bubble;
+	op16_sw		<= inst ?= b"110_-_-----_-----_00" and not bubble;
 
-	op16_addi	<= inst ?= b"000_-_-----_-----_01" and not (bubble);
-	op16_jal	<= inst ?= b"001_-_-----_-----_01" and not (bubble);
-	op16_li		<= inst ?= b"010_-_-----_-----_01" and not (bubble);
-	op16_addi16sp	<= inst ?= b"011_-_00010_-----_01" and not (bubble);
-	op16_lui	<= inst ?= b"011_-_-----_-----_01" and not (bubble) and not op16_addi16sp;
+	op16_addi	<= inst ?= b"000_-_-----_-----_01" and not bubble;
+	op16_jal	<= inst ?= b"001_-_-----_-----_01" and not bubble;
+	op16_li		<= inst ?= b"010_-_-----_-----_01" and not bubble;
+	op16_addi16sp	<= inst ?= b"011_-_00010_-----_01" and not bubble;
+	op16_lui	<= inst ?= b"011_-_-----_-----_01" and not bubble and not op16_addi16sp;
 
-	op16_srli	<= inst ?= b"100_0_00---_00001_01" and not (bubble); -- shamt 1 is directly implemented
-	op16_srai	<= inst ?= b"100_0_01---_00001_01" and not (bubble); -- shamt 1 is directly implemented
-	op16_andi	<= inst ?= b"100_-_10---_-----_01" and not (bubble);
-	op16_sub	<= inst ?= b"100_-_11---_00---_01" and not (bubble);
-	op16_xor	<= inst ?= b"100_-_11---_01---_01" and not (bubble);
-	op16_or		<= inst ?= b"100_-_11---_10---_01" and not (bubble);
-	op16_and	<= inst ?= b"100_-_11---_11---_01" and not (bubble);
-	op16_j		<= inst ?= b"101_-_-----_-----_01" and not (bubble);
-	op16_beqz	<= inst ?= b"110_-_-----_-----_01" and not (bubble);
-	op16_bnez	<= inst ?= b"111_-_-----_-----_01" and not (bubble);
+	op16_srli	<= inst ?= b"100_0_00---_00001_01" and not bubble;
+	op16_srai	<= inst ?= b"100_0_01---_00001_01" and not bubble;
+	op16_andi	<= inst ?= b"100_-_10---_-----_01" and not bubble;
+	op16_sub	<= inst ?= b"100_-_11---_00---_01" and not bubble;
+	op16_xor	<= inst ?= b"100_-_11---_01---_01" and not bubble;
+	op16_or		<= inst ?= b"100_-_11---_10---_01" and not bubble;
+	op16_and	<= inst ?= b"100_-_11---_11---_01" and not bubble;
+	op16_j		<= inst ?= b"101_-_-----_-----_01" and not bubble;
+	op16_beqz	<= inst ?= b"110_-_-----_-----_01" and not bubble;
+	op16_bnez	<= inst ?= b"111_-_-----_-----_01" and not bubble;
 
-	op16_slli	<= inst ?= b"000_0_-----_00001_10" and not (bubble); -- shamt 1 is directly implemented
-	op16_lwsp	<= inst ?= b"010_-_-----_-----_10" and not (bubble);
-	op16_jr		<= inst ?= b"100_0_-----_00000_10" and not (bubble);
-	op16_mv		<= inst ?= b"100_0_-----_-----_10" and not (bubble) and not op16_jr;
-	op16_ebreak	<= inst ?= b"100_1_00000_00000_10" and not (bubble);
-	op16_jalr	<= inst ?= b"100_1_-----_00000_10" and not (bubble) and not op16_ebreak;
-	op16_add	<= inst ?= b"100_1_-----_-----_10" and not (bubble) and not op16_jalr and not op16_ebreak;
-	op16_swsp	<= inst ?= b"110_-_-----_-----_10" and not (bubble);
+	op16_slli	<= inst ?= b"000_0_-----_00001_10" and not bubble;
+	op16_lwsp	<= inst ?= b"010_-_-----_-----_10" and not bubble;
+	op16_jr		<= inst ?= b"100_0_-----_00000_10" and not bubble;
+	op16_mv		<= inst ?= b"100_0_-----_-----_10" and not bubble and not op16_jr;
+	op16_ebreak	<= inst ?= b"100_1_00000_00000_10" and not bubble;
+	op16_jalr	<= inst ?= b"100_1_-----_00000_10" and not bubble and not op16_ebreak;
+	op16_add	<= inst ?= b"100_1_-----_-----_10" and not bubble and not op16_jalr and not op16_ebreak;
+	op16_swsp	<= inst ?= b"110_-_-----_-----_10" and not bubble;
 
 	-- Non-standard extensions to support microcode are permitted in these opcode gaps
-	op16_slli_setrd	<= inst ?= b"000_1_-----_00001_10" and not (bubble);
-	op16_slli_setrs	<= inst ?= b"000_1_-----_00010_10" and not (bubble);
-	op16_slli_thunk	<= inst ?= b"000_1_-----_00100_10" and not (bubble);
-	op16_slli_swap	<= inst ?= b"000_1_-----_01000_10" and not (bubble);
+	op16_slli_setrd	<= inst ?= b"000_1_-----_00001_10" and not bubble;
+	op16_slli_setrs	<= inst ?= b"000_1_-----_00010_10" and not bubble;
+	op16_slli_thunk	<= inst ?= b"000_1_-----_00100_10" and not bubble;
 
 	-- Blanket matches for RVC and RV32I instructions
 	op32 <= and inst(1 downto 0) and not (bubble);
@@ -163,7 +161,7 @@ begin
 		op16_addi or op16_jal or op16_li or op16_addi16sp or op16_lui or
 		op16_srli or op16_srai or op16_andi or op16_sub or op16_xor or op16_or or op16_and or op16_j or op16_beqz or op16_bnez or
 		op16_slli or op16_lwsp or op16_jr or op16_mv or op16_ebreak or op16_jalr or op16_add or op16_swsp or
-		op16_slli_setrd or op16_slli_setrs or op16_slli_thunk or op16_slli_swap);
+		op16_slli_setrd or op16_slli_setrs or op16_slli_thunk);
 
 	trap <= op16_trap or op32_trap;
 
@@ -240,7 +238,7 @@ begin
 			or (inst(11 downto 7) and (op16_ADDI or op16_ADD
 				or (op16_MV and not dly16_slli_setrd)
 				or op16_ADDI16SP
-				or op16_SLLI_SETRD or op16_SLLI_SETRS or op16_SLLI_SWAP 
+				or op16_SLLI_SETRD or op16_SLLI_SETRS
 				or op16_LI or op16_LUI
 				or op16_SLLI))
 			or (("01" & inst(9 downto 7)) and (op16_SUB
@@ -267,8 +265,7 @@ begin
 			or op16_AND or op16_ANDI
 			or op16_OR or op16_XOR
 			or op16_ADDI16SP
-			or op16_SLLI or op16_SRLI or op16_SRAI
-			or op16_SLLI_SWAP))
+			or op16_SLLI or op16_SRLI or op16_SRAI))
 		or ((22x"0" & inst(10 downto 7) & inst(12 downto 11) & inst(5) & inst(6) & "00") and op16_ADDI4SPN)
 		or ((std_logic_vector'(31 downto 8 => '0') & inst(8 downto 7) & inst(12 downto 9) & "00") and op16_SWSP)
 		or ((std_logic_vector'(31 downto 8 => '0') & inst(3 downto 2) & inst(12) & inst(6 downto 4) & "00") and op16_LWSP)
@@ -292,7 +289,6 @@ begin
 		((aluA and aluB) and (op16_ANDI or op16_AND)) or
 		((aluA xor aluB) and (op16_XOR)) or
 		((aluA or aluB) and (op16_OR or op16_MV)) or
-		((aluA(15 downto 0) & aluA(31 downto 16)) and op16_SLLI_SWAP) or
 		(rdata and (dly16_lw or dly16_lwsp)) or
 		(std_logic_vector(resize(pc_fetch_dly & "0", 32) and (op16_JAL or op16_JALR or trap))); -- instruction following the jump (hence _dly)
 
@@ -316,8 +312,7 @@ begin
 		op16_ADDI or op16_ADDI4SPN or op16_ADDI16SP or
 		op16_ANDI or op16_MV or op16_ADD or
 		op16_AND or op16_OR or op16_XOR or op16_SUB or
-		op16_SLLI or op16_SRLI or op16_SRAI or
-		op16_SLLI_SWAP;
+		op16_SLLI or op16_SRLI or op16_SRAI;
 
 	regs_proc : process(clk)
 	begin

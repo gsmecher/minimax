@@ -15,9 +15,6 @@
 .macro x.thunk rd
 	.half 0x1012 + (\rd << 7)
 .endm
-.macro x.swap rd
-	.half 0x1022 + (\rd << 7)
-.endm
 
 /* Trapping looks like a JAL with a microcode-specific register bank.
  * At the point of entry,
@@ -64,16 +61,16 @@ microcode_entry:
 	/* Fetch instruction, which may be half-word aligned. */
 	c.mv x15, x3
 	c.andi x15, 3
-	c.mv x8, x3
-	c.andi x8, -4	/* strip LSBs and fetch */
-	c.lw x9, 0(x8)
+	c.mv x9, x3
+	c.andi x9, -4	/* strip LSBs and fetch */
+	c.lw x8, 0(x9)
 	c.beqz x15, 1f
 
 	/* Half-aligned - if this is 32 bits, remember to grab the other 16 bits later */
-	x.swap 9
+	c.jal srli16
 
-	/* code paths re-join, with lower 16 bits of instruction in x9 */
-1:	c.mv x10, x9
+	/* code paths re-join, with at least 16 instruction bits in x8 */
+1:	c.mv x10, x8
 	c.andi x10, 3 /* select quadrant */
 	c.slli x10, 1 /* 1 RVC opcode per table entry */
 
@@ -90,41 +87,33 @@ microcode_entry:
 	c.j op32
 
 op32:	/* Complete assembling the 32-bit opcode and unroll the 16-bit fastpath */
-	c.mv x4, x9
 	c.beqz x15, 1f
 
 	/* Split instruction - fetch the other half and assemble */
-	c.lui x11, 0x10
-	c.addi x11, -1 /* 0xffff */
-	c.and x9, x11
-
-	c.lw x10, 4(x8)
-	c.and x10, x11
-	x.swap 10
-
-	c.or x9, x10
-	c.mv x4, x9
-1:	c.j op32_entry
+	c.mv x10, x8
+	c.lw x8, 4(x9)
+	c.jal slli16
+	c.or x8, x10
+1:	c.mv x4, x8
+	c.j op32_entry
 
 op16_shamt_x11:
 	/* We don't need the opcode any more */
-	c.srli x9, 1
-	c.srli x9, 1
+	c.srli x8, 1
+	c.srli x8, 1
 
 	/* Isolate shamt into x11 */
-	c.mv x11, x9
+	c.mv x11, x8
 	c.andi x11, 31
 
-.rept 5
-	c.srli x9, 1
-.endr
-	c.jr ra
+	c.j srli5 /* tail call, so no need to store ra */
 
 op16_srai_srli:
 	c.jal op16_shamt_x11
+	c.mv x9, x8
 
 	/* isolate rd' into rd, stored in x12 */
-	c.mv x12, x9
+	c.mv x12, x8
 	c.andi x12, 0x7
 	c.addi x12, 8
 
@@ -137,13 +126,15 @@ op16_srai_srli:
 
 	c.mv x9, x11
 	c.jal srai_dyn
-	c.j 2f
+
+	/* Write back and thunk */
+	x.poke 12, x8
+	c.addi x3, 2
+	x.thunk 3
 
 1:	c.mv x9, x11
 	c.jal srli_dyn
 
-	/* code paths rejoin */
-2:
 	/* Write back and thunk */
 	x.poke 12, x8
 	c.addi x3, 2
@@ -151,6 +142,7 @@ op16_srai_srli:
 
 op16_slli:
 	c.jal op16_shamt_x11
+	c.mv x9, x8
 
 	/* isolate rd, stored in x12 */
 	c.mv x12, x9
@@ -577,37 +569,34 @@ beq:
 	c.mv x8, x18
 	c.mv x9, x20
 	c.sub x8, x9
-	c.bnez x8, 1f /* branch not taken */
+	c.bnez x8, ret_rv32 /* branch not taken */
 
 	c.jal resolve_imm1
 	c.add x8, x3
 	x.thunk 8
-
-1:	c.j ret_rv32
+	c.j ret_rv32
 
 bne:
 	c.mv x8, x18
 	c.mv x9, x20
 	c.sub x8, x9
-	c.beqz x8, 1f /* branch not taken */
+	c.beqz x8, ret_rv32 /* branch not taken */
 
 	c.jal resolve_imm1
 	c.add x8, x3
 	x.thunk 8
-
-1:	c.j ret_rv32
+	c.j ret_rv32
 
 blt:
 	c.mv x8, x18
 	c.mv x9, x20
 	c.jal slt_func
-	c.beqz x8, 1f /* branch not taken */
+	c.beqz x8, ret_rv32 /* branch not taken */
 
 	c.jal resolve_imm1
 	c.add x8, x3
 	x.thunk 8
-
-1:	c.j ret_rv32
+	c.j ret_rv32
 
 slt:
 	c.mv x8, x18
@@ -674,11 +663,11 @@ srli_srai:
 	c.beqz x11, 1f
 
 	c.jal srai_dyn
-	c.j 2f
+	x.poke 6, x8
+	c.j ret_rv32
 
 1:	c.jal srli_dyn
-
-2:	x.poke 6, x8
+	x.poke 6, x8
 	c.j ret_rv32
 
 slti:
