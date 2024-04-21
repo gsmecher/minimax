@@ -7,7 +7,63 @@ module minimax (
    output inst_regce,
    output [31:0] addr,
    output [31:0] wdata,
-   output [3:0] wmask,
+   output [3:0] wmask,module minimax (
+    input clk,
+    input reset,
+    input [15:0] inst,
+    input [31:0] rdata,
+    output reg [11:0] inst_addr,
+    output reg inst_regce,
+    output reg [31:0] addr,
+    output reg [31:0] wdata,
+    output reg [3:0] wmask,
+    output reg rreq
+);
+
+    // Local parameters for configuration
+    localparam ADDR_BITS = 11;  // Example parameter
+
+    // Register and wire definitions
+    reg [ADDR_BITS-1:0] pc = 0;
+    wire [31:0] alu_result;
+    wire branch_taken;
+
+    // ALU logic (simplified example)
+    assign alu_result = (inst[3:0] == 4'b0101) ? rdata + inst[15:0] : rdata - inst[15:0];
+
+    // Program counter update logic
+    always @(posedge clk) begin
+        if (!reset) begin
+            pc <= pc + (branch_taken ? 2 : 1);  // Simplified branch logic
+        end else begin
+            pc <= 0;
+        end
+    end
+
+    // Output logic
+    always @(posedge clk) begin
+        if (!reset) begin
+            inst_addr <= pc;
+            addr <= alu_result[11:0];  // Example address computation
+            wdata <= rdata;            // Data to write
+            wmask <= 4'b1111;          // Write enable all
+            rreq <= 1'b1;              // Read request active
+            inst_regce <= 1'b1;        // Instruction register clock enable
+        end else begin
+            inst_addr <= 0;
+            addr <= 0;
+            wdata <= 0;
+            wmask <= 0;
+            rreq <= 0;
+            inst_regce <= 0;
+        end
+    end
+
+    // Branch logic example (simplified)
+    assign branch_taken = (inst[15:12] == 4'b1100) && (rdata[0] == 1'b1);  // Conditional branch
+
+endmodule
+
    output rreq);
   wire [5:0] addrs;
   wire [5:0] addrd;
