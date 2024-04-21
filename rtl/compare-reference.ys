@@ -1,41 +1,50 @@
-# Script adapted from https://github.com/YosysHQ/yosys/issues/302#issuecomment-276019637
+# Script for equivalence checking using Yosys
+# Adapted from a community-provided example on GitHub
+# See https://github.com/YosysHQ/yosys/issues/302#issuecomment-276019637 for original discussion
 
+# Read the original design and prepare for verification
 read_verilog base-minimax.v
 prep -flatten -top minimax
 splitnets -ports;;
 design -stash reference
+
+# Read the modified design and prepare for comparison
 read_verilog minimax.v
 prep -flatten -top minimax
 splitnets -ports;;
 design -stash rework
+
+# Setup design copies for equivalence checking
 design -copy-from reference -as reference minimax
 design -copy-from rework -as rework minimax
 equiv_make reference rework equiv
 prep -flatten -top equiv
 
+# Clean the design
 opt_clean -purge
-#show -prefix equiv-prep -colors 1 -stretch
 
-## method 1
+# Equivalence checking using Method 1: Full optimization with induction
+## Full optimization followed by sequential equivalence check
 opt -full
 equiv_simple -seq 5
 equiv_induct -seq 5
 equiv_status -assert
 
-## method 2
-#equiv_struct -icells t:$adff t:$equiv
-#equiv_simple -seq 5
-#equiv_induct -seq 5
-#equiv_status -assert
+# Uncomment to use other methods
+## Method 2: Structural equivalence check
+# equiv_struct -icells t:$adff t:$equiv
+# equiv_simple -seq 5
+# equiv_induct -seq 5
+# equiv_status -assert
 
-## method 3
-#techmap -map +/adff2dff.v
-#equiv_simple -seq 5
-#equiv_induct -seq 5
-#equiv_status -assert
+## Method 3: Map ADFF to DFF
+# techmap -map +/adff2dff.v
+# equiv_simple -seq 5
+# equiv_induct -seq 5
+# equiv_status -assert
 
-## method 4
-#clk2fflogic
-#equiv_simple -seq 10
-#equiv_induct -seq 10
-#equiv_status -assert
+## Method 4: Convert clocked logic to FF logic
+# clk2fflogic
+# equiv_simple -seq 10
+# equiv_induct -seq 10
+# equiv_status -assert
