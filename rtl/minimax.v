@@ -220,7 +220,7 @@ module minimax (
   assign inst_ce = ~stall_f;
 
   // PC logic
-  wire cond_taken = (op16_beqz_e & (~|regS) | (op16_bnez_e & (|regS)));
+  wire cond_taken = (op16_beqz_e & ~|regS) | (op16_bnez_e & |regS);
   wire branch_taken = cond_taken | op16_j_e | op16_jal_e | op16_jr_e | op16_jalr_e;
 
   wire dest_abs = ~bubble_e & (op32_e | op16_slli_thunk_e | op16_jr_e | op16_jalr_e);
@@ -314,14 +314,14 @@ module minimax (
         op16_swsp_d: aluA_imm <= {24'b0, inst[8:7], inst[12:9], 2'b0};
         op16_lwsp_d: aluA_imm <= {24'b0, inst[3:2], inst[12], inst[6:4], 2'b0};
         op16_lw_d | op16_sw_d: aluA_imm <= {25'b0, inst[5], inst[12:10], inst[6], 2'b0};
-	default: aluA_imm <= 0;
+        default: aluA_imm <= 0;
       endcase
 
       unique case(1'b1)
-	op16_addi_d | op16_andi_d | op16_li_d: aluB_imm <= {{27{inst[12]}}, inst[6:2]};
-	op16_lui_d: aluB_imm <= {{15{inst[12]}}, inst[6:2], 12'b0};
+        op16_addi_d | op16_andi_d | op16_li_d: aluB_imm <= {{27{inst[12]}}, inst[6:2]};
+        op16_lui_d: aluB_imm <= {{15{inst[12]}}, inst[6:2], 12'b0};
         op16_addi16sp_d: aluB_imm <= {{23{inst[12]}}, inst[4:3], inst[5], inst[2], inst[6], 4'b0};
-	default: aluB_imm <= 0;
+        default: aluB_imm <= 0;
       endcase
     end
   end
@@ -354,7 +354,7 @@ module minimax (
       shamt_e <= 0;
       shift_right_e <= 0;
     end else begin
-      case(1'b1)
+      unique case(1'b1)
         op16_srli_d: shamt_e <= inst[6:2];
         op16_srai_d: shamt_e <= inst[6:2];
         op16_slli_d: shamt_e <= inst[6:2];
