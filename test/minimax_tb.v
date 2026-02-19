@@ -45,7 +45,6 @@ module minimax_tb;
         $readmemh(ROM_FILENAME, rom_array);
     end
 
-    wire [15:0] rom_window;
     reg [15:0] inst;
 
     wire [PC_BITS-1:0] inst_addr;
@@ -56,24 +55,22 @@ module minimax_tb;
     wire rreq;
     reg rack;
 
-    assign rom_window = rom_array[ticks];
-
     always @(posedge clk) begin
 
         rdata <= {rom_array[{addr[PC_BITS-1:2], 1'b1}], rom_array[{addr[PC_BITS-1:2], 1'b0}]};
         rack <= rreq;
 
-	if(inst_ce)
+        if(inst_ce)
           inst <= rom_array[inst_addr[PC_BITS-1:1]];
 
         if (wmask[3])
-            rom_array[addr[PC_BITS-1:1]+1][15:8] = wdata[31:24];
+            rom_array[addr[PC_BITS-1:1]+1][15:8] <= wdata[31:24];
         if (wmask[2])
-            rom_array[addr[PC_BITS-1:1]+1][7:0] = wdata[23:16];
+            rom_array[addr[PC_BITS-1:1]+1][7:0] <= wdata[23:16];
         if (wmask[1])
-            rom_array[addr[PC_BITS-1:1]][15:8] = wdata[15:8];
+            rom_array[addr[PC_BITS-1:1]][15:8] <= wdata[15:8];
         if (wmask[0])
-            rom_array[addr[PC_BITS-1:1]][7:0] = wdata[7:0];
+            rom_array[addr[PC_BITS-1:1]][7:0] <= wdata[7:0];
     end
 
     minimax #(
@@ -83,7 +80,7 @@ module minimax_tb;
         .clk(clk),
         .reset(reset),
         .inst_addr(inst_addr),
-	.inst_ce(inst_ce),
+        .inst_ce(inst_ce),
         .inst(inst),
         .addr(addr),
         .wdata(wdata),

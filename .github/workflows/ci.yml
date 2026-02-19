@@ -5,10 +5,11 @@ on: [push, pull_request]
 jobs:
   compliance:
     name: Regression Tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
       with:
         path: minimax
 
@@ -16,7 +17,8 @@ jobs:
       run: make -C minimax/test
 
     - name: Archive test report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
+      if: always()
       with:
         name: regression-test-report
         path: |
